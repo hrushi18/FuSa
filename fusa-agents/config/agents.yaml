@@ -1,0 +1,202 @@
+# One agent per work product. Adding an agent = adding a row (plus its method + checklist file).
+# `enabled: false` agents are declared so the plan and the PENDING owners are known, but not run yet.
+# Clause ids are *references*; their text lives in _clause-register only.
+
+agents:
+  # ── 1 · Concept & Requirements ────────────────────────────────────────────
+  - id: sys-sads
+    work_product: SADS
+    title: SEooC Assumptions & Definitions Specification (assumed item, assumed safety goals)
+    phase: 1
+    inputs: [item-definition.md]
+    clauses: ["26262-3:5", "26262-3:6", "26262-10:9"]
+    method: seooc-assumptions
+    conventions: [ids, document-structure]
+    checklist: SADS
+    item_prefixes: [SG, AOU]
+
+  - id: sys-tsr
+    work_product: TSR
+    title: Technical Safety Requirements
+    phase: 1
+    requires: [SADS]
+    covers: [SADS]                    # every SG must have at least one TSR child
+    clauses: ["26262-4:6", "26262-8:6"]
+    method: requirements-authoring
+    conventions: [ids, document-structure]
+    checklist: TSR
+
+  - id: sm-catalog
+    work_product: SM-CATALOG
+    title: Safety Mechanism Catalogue (defined once, referenced everywhere)
+    phase: 6
+    requires: [TSR]
+    inputs: [component-safety-manuals.md]
+    clauses: ["26262-4:6.4", "26262-5:7.4"]
+    method: safety-mechanisms
+    conventions: [ids, document-structure]
+    checklist: SM-CATALOG
+    item_prefixes: [SM]
+
+  - id: sys-tsc
+    work_product: TSC
+    title: Technical Safety Concept
+    phase: 1
+    requires: [TSR, SM-CATALOG]
+    covers: [TSR]                     # every TSR is allocated in the TSC
+    clauses: ["26262-4:6"]
+    method: safety-concept
+    conventions: [ids, document-structure, diagram-rules]
+    checklist: TSC
+
+  - id: sys-hsi
+    work_product: HSI
+    title: Hardware-Software Interface Specification
+    phase: 1
+    requires: [TSC]
+    clauses: ["26262-4:6.4.7"]
+    method: requirements-authoring
+    conventions: [ids, document-structure]
+    checklist: generic
+    enabled: false
+
+  - id: hw-hsr
+    work_product: HSR
+    title: Hardware Safety Requirements
+    phase: 1
+    requires: [TSC]
+    clauses: ["26262-5:6"]
+    method: requirements-authoring
+    conventions: [ids, document-structure]
+    checklist: generic
+    enabled: false
+
+  - id: sw-ssr
+    work_product: SSR
+    title: Software Safety Requirements
+    phase: 1
+    requires: [TSC, HSI]
+    clauses: ["26262-6:6"]
+    method: requirements-authoring
+    conventions: [ids, document-structure]
+    checklist: generic
+    enabled: false
+
+  # ── 2 · System Level Analysis ─────────────────────────────────────────────
+  - id: sys-fmea
+    work_product: SYS-FMEA
+    title: System FMEA
+    phase: 2
+    requires: [TSC, SM-CATALOG]
+    inputs: [architecture.md]
+    clauses: ["26262-4:7.4.3", "26262-9:8"]
+    method: fmea
+    conventions: [ids, document-structure]
+    checklist: FMEA
+    item_prefixes: [SFM]
+
+  - {id: sys-fta, work_product: SYS-FTA, title: System FTA, phase: 2, requires: [TSC], clauses: ["26262-4:7.4.3", "26262-9:8"], method: fta, conventions: [ids], checklist: generic, enabled: false}
+  - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
+
+  # ── 3 · Hardware Level Analysis ───────────────────────────────────────────
+  - {id: hw-design, work_product: HW-DESIGN, title: Hardware Design Specification, phase: 3, requires: [HSR], clauses: ["26262-5:7"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+  - {id: hw-fmea,   work_product: HW-FMEA,   title: Hardware FMEA, phase: 3, requires: [HW-DESIGN, SM-CATALOG], clauses: ["26262-5:7.4.3"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false}
+  - {id: hw-fta,    work_product: HW-FTA,    title: Hardware FTA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-5:7.4.3"], method: fta, conventions: [ids], checklist: generic, enabled: false}
+  - {id: hw-dfa,    work_product: HW-DFA,    title: Hardware DFA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
+
+  # ── 4 · Software Level Analysis ───────────────────────────────────────────
+  - {id: sw-arch,  work_product: SW-ARCH,  title: Software Architectural Design, phase: 4, requires: [SSR], clauses: ["26262-6:7"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+  - {id: sw-fmea,  work_product: SW-FMEA,  title: Software FMEA, phase: 4, requires: [SW-ARCH, SM-CATALOG], clauses: ["26262-6:7.4.10"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false}
+  - {id: sw-fta,   work_product: SW-FTA,   title: Software FTA, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:7.4.10"], method: fta, conventions: [ids], checklist: generic, enabled: false}
+  - {id: sw-dfa,   work_product: SW-DFA,   title: Software DFA, phase: 4, requires: [SW-ARCH], clauses: ["26262-9:7", "26262-6:7.4.11"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
+  - {id: sw-calib, work_product: SW-CALIB, title: Calibration Data Safety Analysis, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:Annex C"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+
+  # ── 5 · Quantitative Analysis ─────────────────────────────────────────────
+  - id: hw-fmeda
+    work_product: HW-FMEDA
+    title: Hardware FMEDA with SPFM / LFM / PMHF
+    phase: 5
+    requires: [SM-CATALOG]            # HW-DESIGN too, once enabled — the author marks it PENDING until then
+    inputs: [fmeda-failure-modes.csv, component-safety-manuals.md]
+    clauses: ["26262-5:8", "26262-5:9", "26262-5:Annex C"]
+    method: fmeda
+    conventions: [ids, document-structure]
+    checklist: FMEDA
+    item_prefixes: [HFD]
+    tools: [metrics]                  # SPFM/LFM/PMHF computed by fusa.tools.metrics, never by the model
+
+  # ── 6 · Safety Solution & Deliverables ────────────────────────────────────
+  - {id: tsc-close-the-loop,  work_product: TSC-CLOSURE,   title: TSC close-the-loop (analysis findings back into the concept), phase: 6, requires: [TSC, SYS-FMEA], clauses: ["26262-4:6", "26262-9:8.4.9"], method: safety-concept, conventions: [ids], checklist: generic, enabled: false}
+  - {id: safety-manual-aou,   work_product: SAFETY-MANUAL, title: SEooC Safety Manual and Assumptions of Use, phase: 6, requires: [SADS, TSC, SM-CATALOG], clauses: ["26262-10:9"], method: seooc-assumptions, conventions: [ids, document-structure], checklist: generic, enabled: false}
+
+  # ── 7 · Verification & Validation ─────────────────────────────────────────
+  - {id: test-spec-agent,    work_product: TEST-SPEC,    title: Safety Test Specification (incl. fault injection), phase: 7, requires: [TSR, TSC], clauses: ["26262-4:7.4.4", "26262-8:9"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+  - {id: traceability-agent, work_product: TRACEABILITY, title: Traceability Matrix (derived from identifiers, not maintained by hand), phase: 7, requires: [TSR, TSC], clauses: ["26262-8:6.4.3"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+
+  # ── V-cycle extension: cybersecurity (ISO/SAE 21434) ─────────────────────
+  # Same registers, same gate, same reviewer; only the clause register and method differ.
+  - id: cs-tara
+    work_product: TARA
+    title: Threat Analysis and Risk Assessment
+    phase: 1
+    requires: [SADS]                  # safety impacts cite SG ids
+    inputs: [item-definition.md, architecture.md]
+    clauses: ["21434:15", "21434:9.3"]
+    method: tara
+    conventions: [ids, document-structure]
+    checklist: TARA
+    item_prefixes: [AS, TS]
+
+  - {id: cs-goals, work_product: CSG, title: Cybersecurity Goals and Concept, phase: 1, requires: [TARA], covers: [TARA],
+     clauses: ["21434:9.4", "21434:9.5"], method: requirements-authoring, conventions: [ids, document-structure], checklist: generic, enabled: false}
+
+  # ── V-cycle extension: tool-runner agents (implementation-side evidence) ──
+  # kind=runner: the report is produced by an external tool; the agent only normalises it. In dry-run
+  # (or with no `command`) the canned report under input/reports drives the chain.
+  - id: sw-static-analysis
+    work_product: SCA-REPORT
+    title: Static Code Analysis Findings (MISRA / cppcheck)
+    phase: 4
+    kind: runner
+    requires: []
+    clauses: ["26262-6:7.4.10", "ASPICE:SWE.4.BP1"]
+    conventions: [ids]
+    checklist: SCA-REPORT
+    item_prefixes: [SCA]
+    runner:
+      command: "cppcheck --xml --xml-version=2 --enable=all --addon=misra input/src 2> {report}"
+      report: input/reports/cppcheck.xml
+      format: cppcheck-xml
+      min_severity: info
+      route: {error: sw-arch}         # design owner must react to error-severity findings
+
+  - id: sec-scan
+    work_product: SEC-SCAN
+    title: Security Scan Findings (SAST)
+    phase: 4
+    kind: runner
+    requires: [TARA]                  # findings feed back into threat scenarios
+    clauses: ["21434:10.4.2", "21434:11"]
+    conventions: [ids]
+    checklist: SEC-SCAN
+    item_prefixes: [SEC]
+    runner:
+      command: "semgrep scan --config auto --sarif -o {report} input/src"
+      report: input/reports/semgrep.sarif
+      format: sarif
+      min_severity: warning
+      tags_to: {security: cs-tara, CWE: cs-tara}
+
+  # ── V-cycle extension: PLM boundary ──────────────────────────────────────
+  # SYS-REQ is not authored by an agent; it is imported:  fusa import-reqif input/customer-requirements.reqif --work-product SYS-REQ --prefix CR --id-attribute req_id
+  # Agents may `requires: [SYS-REQ]` exactly like any other work product.
+
+  # The reviewer: kind=review, no `method`, instantiated once per work product by the orchestrator.
+  - id: verification-review
+    work_product: REVIEW
+    title: Independent verification review
+    phase: 7
+    kind: review
+    clauses: ["26262-8:9"]
+    conventions: [ids, document-structure]
+    reviewed_by: null

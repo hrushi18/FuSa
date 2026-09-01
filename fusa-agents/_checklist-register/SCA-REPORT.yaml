@@ -1,0 +1,5 @@
+work_product: SCA-REPORT
+items:
+  - {id: SCA-01, text: every finding has tool, rule, severity, location and text,                  clause: "ASPICE:SWE.4.BP1", check: structural}
+  - {id: SCA-02, text: error-severity findings are routed (returns_to) to a design or code owner,   clause: "26262-6:7.4.10", check: review}
+  - {id: SCA-03, text: suppressed or accepted findings carry a justification, not a deletion,       clause: "26262-8:9",       check: review}

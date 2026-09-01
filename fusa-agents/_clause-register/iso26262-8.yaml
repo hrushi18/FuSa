@@ -1,0 +1,6 @@
+part: 8
+title: Supporting processes
+clauses:
+  - {id: "26262-8:6",     topic: specification and management of safety requirements, text: ""}
+  - {id: "26262-8:6.4.3", topic: traceability of safety requirements,                 text: ""}
+  - {id: "26262-8:9",     topic: verification (reviews, independence of reviewer),    text: ""}

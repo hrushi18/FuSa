@@ -1,0 +1,7 @@
+work_product: TSR
+items:
+  - {id: TSR-01, text: every TSR has exactly one parent SG that exists,                        clause: "26262-4:6.4.1", check: structural}
+  - {id: TSR-02, text: every SG has at least one TSR (no gate without children),               clause: "26262-8:6.4.3", check: structural}
+  - {id: TSR-03, text: ASIL inherited from parent or decomposition cited,                      clause: "26262-9:5",     check: review}
+  - {id: TSR-04, text: each requirement is a single testable statement with a verification method, clause: "26262-8:6.4.2", check: review}
+  - {id: TSR-05, text: safe state and FTTI are addressed for each SG,                          clause: "26262-4:6.4.3", check: review}

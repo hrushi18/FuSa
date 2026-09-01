@@ -1,0 +1,6 @@
+.DS_Store
+.venv/
+__pycache__/
+*.egg-info/
+README (2).md
+agents (2).yaml

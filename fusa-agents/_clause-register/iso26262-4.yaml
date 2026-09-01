@@ -1,0 +1,12 @@
+part: 4
+title: Product development at the system level
+clauses:
+  - {id: "26262-4:6",       topic: technical safety concept,                    text: ""}
+  - {id: "26262-4:6.4.1",   topic: specification of technical safety requirements, text: ""}
+  - {id: "26262-4:6.4.2",   topic: safety mechanisms for fault detection and control, text: ""}
+  - {id: "26262-4:6.4.3",   topic: safe state and fault tolerant time interval,  text: ""}
+  - {id: "26262-4:6.4.4",   topic: system architectural design,                 text: ""}
+  - {id: "26262-4:6.4.7",   topic: hardware-software interface specification,   text: ""}
+  - {id: "26262-4:7",       topic: system and item integration and testing,     text: ""}
+  - {id: "26262-4:7.4.3",   topic: safety analyses at system level,             text: ""}
+  - {id: "26262-4:7.4.4",   topic: integration test methods incl. fault injection, text: ""}

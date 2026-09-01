@@ -1,0 +1,28 @@
+# Which work products evidence which ASPICE base practices. `fusa aspice` aggregates the status board over this.
+processes:
+  SYS.2:
+    name: System Requirements Analysis
+    base_practices:
+      - {id: BP1, name: Specify system requirements,          work_products: [SYS-REQ, TSR]}
+      - {id: BP6, name: Ensure traceability,                  work_products: [TRACEABILITY]}
+  SYS.3:
+    name: System Architectural Design
+    base_practices:
+      - {id: BP1, name: Develop system architecture,          work_products: [TSC]}
+  SWE.1:
+    name: Software Requirements Analysis
+    base_practices:
+      - {id: BP1, name: Specify software requirements,        work_products: [SSR]}
+  SWE.2:
+    name: Software Architectural Design
+    base_practices:
+      - {id: BP1, name: Develop software architecture (HLD),  work_products: [SW-ARCH]}
+  SWE.4:
+    name: Software Unit Verification
+    base_practices:
+      - {id: BP1, name: Static verification of units,         work_products: [SCA-REPORT]}
+  SEC.1:
+    name: Cybersecurity Requirements Elicitation
+    base_practices:
+      - {id: BP1, name: Threat analysis and risk assessment,  work_products: [TARA]}
+      - {id: BP3, name: Vulnerability analysis,               work_products: [SEC-SCAN]}

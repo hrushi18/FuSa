@@ -1,0 +1,5 @@
+work_product: FMEA
+items:
+  - {id: FMEA-01, text: every element of the architecture has at least one FM row,          clause: "26262-9:8", check: review}
+  - {id: FMEA-02, text: every FM row classifies the failure mode and names SM ids or is flagged uncovered, clause: "26262-9:8", check: review}
+  - {id: FMEA-03, text: "uncovered failure modes carry finding=uncovered and a returns_to sys-tsc", clause: "26262-9:8.4.9", check: review}

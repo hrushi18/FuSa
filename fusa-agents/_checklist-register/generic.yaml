@@ -1,0 +1,7 @@
+work_product: generic
+items:
+  - {id: GEN-01, text: front matter complete and id matches the work product,        clause: "26262-8:6", check: structural}
+  - {id: GEN-02, text: every item follows the id convention and has a single parent,  clause: "26262-8:6.4.3", check: structural}
+  - {id: GEN-03, text: every normative statement cites its responsible clause id,     clause: "26262-8:9", check: review}
+  - {id: GEN-04, text: no upstream content is invented — missing inputs are PENDING,  clause: "26262-8:9", check: review}
+  - {id: GEN-05, text: open points section lists every PENDING marker,                clause: "26262-8:6", check: review}

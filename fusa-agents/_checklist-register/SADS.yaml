@@ -1,0 +1,6 @@
+work_product: SADS
+items:
+  - {id: SADS-01, text: assumed item and its boundary are described (function, environment, interfaces), clause: "26262-3:5.4.2", check: review}
+  - {id: SADS-02, text: each assumed safety goal has ASIL, safe state, FTTI and `assumed: true`,     clause: "26262-3:6.4.6", check: review}
+  - {id: SADS-03, text: every integrator-facing assumption is an AOU item,                          clause: "26262-10:9",   check: review}
+  - {id: SADS-04, text: SG ids are unique and follow convention,                                      clause: "26262-8:6",    check: structural}

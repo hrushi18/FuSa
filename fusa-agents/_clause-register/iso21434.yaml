@@ -1,0 +1,16 @@
+standard: ISO/SAE 21434:2021
+title: Road vehicles — Cybersecurity engineering
+clauses:
+  - {id: "21434:9.3",  topic: item definition (cybersecurity),            text: ""}
+  - {id: "21434:9.4",  topic: cybersecurity goals,                         text: ""}
+  - {id: "21434:9.5",  topic: cybersecurity concept,                       text: ""}
+  - {id: "21434:10.4", topic: cybersecurity specifications and design,     text: ""}
+  - {id: "21434:10.4.2", topic: post-development requirements / weaknesses analysis, text: ""}
+  - {id: "21434:11",   topic: cybersecurity validation,                    text: ""}
+  - {id: "21434:15.3", topic: TARA — asset identification,                 text: ""}
+  - {id: "21434:15.4", topic: TARA — threat scenario identification,       text: ""}
+  - {id: "21434:15.5", topic: TARA — impact rating,                        text: ""}
+  - {id: "21434:15.6", topic: TARA — attack path analysis,                 text: ""}
+  - {id: "21434:15.7", topic: TARA — attack feasibility rating,            text: ""}
+  - {id: "21434:15.8", topic: TARA — risk value determination,             text: ""}
+  - {id: "21434:15.9", topic: TARA — risk treatment decision,              text: ""}

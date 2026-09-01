@@ -1,0 +1,6 @@
+part: 9
+title: ASIL-oriented and safety-oriented analyses
+clauses:
+  - {id: "26262-9:7",     topic: analysis of dependent failures,                    text: ""}
+  - {id: "26262-9:8",     topic: safety analyses (FMEA, FTA) requirements,          text: ""}
+  - {id: "26262-9:8.4.9", topic: feeding analysis results back into the safety concept, text: ""}

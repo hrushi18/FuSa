@@ -1,0 +1,10 @@
+part: 3
+title: Concept phase
+clauses:
+  - {id: "26262-3:5",     topic: item definition,                   text: ""}
+  - {id: "26262-3:5.4.1", topic: functional and non-functional requirements of the item, text: ""}
+  - {id: "26262-3:5.4.2", topic: item boundary and interfaces,      text: ""}
+  - {id: "26262-3:6",     topic: hazard analysis and risk assessment, text: ""}
+  - {id: "26262-3:6.4.4", topic: ASIL determination,                text: ""}
+  - {id: "26262-3:6.4.6", topic: safety goals,                      text: ""}
+  - {id: "26262-3:7",     topic: functional safety concept,         text: ""}

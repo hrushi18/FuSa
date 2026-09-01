@@ -1,0 +1,17 @@
+{
+  "version": "2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "semgrep", "rules": [
+      {"id": "c.lang.security.insecure-use-memcpy", "properties": {"tags": ["security", "CWE-120"]}, "defaultConfiguration": {"level": "error"}},
+      {"id": "c.lang.best-practice.magic-number", "properties": {"tags": ["maintainability"]}, "defaultConfiguration": {"level": "note"}}
+    ]}},
+    "results": [
+      {"ruleId": "c.lang.security.insecure-use-memcpy", "level": "error",
+       "message": {"text": "memcpy with attacker-controlled length; validate len against sizeof(buf)"},
+       "locations": [{"physicalLocation": {"artifactLocation": {"uri": "input/src/pressure.c"}, "region": {"startLine": 5}}}]},
+      {"ruleId": "c.lang.best-practice.magic-number",
+       "message": {"text": "Magic number 4095; name the ADC full-scale constant"},
+       "locations": [{"physicalLocation": {"artifactLocation": {"uri": "input/src/pressure.c"}, "region": {"startLine": 7}}}]}
+    ]
+  }]
+}

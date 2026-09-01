@@ -1,0 +1,5 @@
+work_product: SM-CATALOG
+items:
+  - {id: SM-01, text: each SM has detects, reaction, dc_claim with source, allocated_to,   clause: "26262-4:6.4.2", check: review}
+  - {id: SM-02, text: supplier mechanisms cite the safety manual section and its AOUs,   clause: "26262-10:9",   check: review}
+  - {id: SM-03, text: no mechanism is described anywhere except here,                    clause: "26262-8:6",    check: review}

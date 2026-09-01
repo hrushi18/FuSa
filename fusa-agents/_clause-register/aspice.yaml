@@ -1,0 +1,10 @@
+standard: Automotive SPICE 4.0
+title: Process reference (base practices referenced by checklists)
+clauses:
+  - {id: "ASPICE:SYS.2.BP1", topic: specify system requirements,                 text: ""}
+  - {id: "ASPICE:SYS.2.BP6", topic: ensure consistency and bidirectional traceability, text: ""}
+  - {id: "ASPICE:SWE.1.BP1", topic: specify software requirements,               text: ""}
+  - {id: "ASPICE:SWE.2.BP1", topic: develop software architecture,               text: ""}
+  - {id: "ASPICE:SWE.3.BP1", topic: develop detailed design,                     text: ""}
+  - {id: "ASPICE:SWE.4.BP1", topic: specify software unit verification measures (incl. static analysis), text: ""}
+  - {id: "ASPICE:SUP.1.BP1", topic: quality assurance strategy,                  text: ""}

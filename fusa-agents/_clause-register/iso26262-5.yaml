@@ -1,0 +1,10 @@
+part: 5
+title: Product development at the hardware level
+clauses:
+  - {id: "26262-5:6",       topic: hardware safety requirements,                text: ""}
+  - {id: "26262-5:7",       topic: hardware design,                             text: ""}
+  - {id: "26262-5:7.4",     topic: hardware safety analyses and safety mechanisms, text: ""}
+  - {id: "26262-5:7.4.3",   topic: hardware safety analysis methods,            text: ""}
+  - {id: "26262-5:8",       topic: hardware architectural metrics (SPFM, LFM),  text: ""}
+  - {id: "26262-5:9",       topic: random hardware failure evaluation (PMHF / cut sets), text: ""}
+  - {id: "26262-5:Annex C", topic: failure mode classification and metric calculation, text: ""}
