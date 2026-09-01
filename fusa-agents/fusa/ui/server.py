@@ -8,6 +8,8 @@
     GET  /api/logs?since=N    log lines appended since N (long-poll style)
     GET  /api/wp/{WP}         generated markdown + record (+ metrics.md if present)
     GET  /api/aspice          base-practice coverage table (markdown)
+    GET  /api/input           files under input/ (name, size, modified)
+    POST /api/input/fmeda     upload failure-mode CSV (validated) -> saves + runs the chain
     GET  /api/report          live release validation (verdict + evidence)
     POST /api/report          same, and writes _generated/VALIDATION-REPORT.md
     GET  /report              printable HTML validation report (print -> PDF)
@@ -16,16 +18,40 @@
 """
 from __future__ import annotations
 
+import csv
+import io
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..orchestrator import Orchestrator
 from ..report import render_html, validate, write_report
 
 STATIC = Path(__file__).parent / "static"
+FMEDA_COLUMNS = ["element", "mode", "lam_fit", "category", "dc", "safety_mechanism"]
+
+
+def validate_fmeda_csv(text: str) -> tuple[int, list[str]]:
+    """Row count + errors; same semantics as tools.metrics.load_csv."""
+    from ..tools.metrics import FailureMode
+    reader = csv.DictReader(io.StringIO(text))
+    missing = set(FMEDA_COLUMNS) - set(reader.fieldnames or [])
+    if missing:
+        return 0, ["missing column(s): " + ", ".join(sorted(missing))]
+    rows, errors = 0, []
+    for n, rec in enumerate(reader, start=2):        # header is line 1
+        rows += 1
+        try:
+            FailureMode(element=rec["element"], mode=rec["mode"], lam=float(rec["lam_fit"]),
+                        category=rec["category"].strip().upper(), dc=float(rec.get("dc") or 0.0))
+        except (ValueError, TypeError) as e:
+            errors.append(f"row {n}: {e}")
+    if not rows:
+        errors.append("no data rows")
+    return rows, errors
 
 
 class Runner:
@@ -107,6 +133,27 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
     @app.get("/api/aspice")
     def aspice():
         return {"table": orch.aspice()}
+
+    @app.get("/api/input")
+    def input_files():
+        d = orch.root / "input"
+        return [{"name": p.name, "size": p.stat().st_size,
+                 "modified": datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")}
+                for p in sorted(d.iterdir()) if p.is_file()] if d.is_dir() else []
+
+    @app.post("/api/input/fmeda", status_code=202)
+    async def upload_fmeda(request: Request):
+        text = (await request.body()).decode("utf-8", errors="replace")
+        rows, errors = validate_fmeda_csv(text)
+        if errors:
+            raise HTTPException(status_code=400, detail=errors)
+        if runner.busy:
+            raise HTTPException(status_code=409, detail="a run is already in progress")
+        path = orch.root / "input" / "fmeda-failure-modes.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        runner.start("run-all (new FMEDA input)", lambda log: orch.run_all(log=log))
+        return {"saved": str(path), "rows": rows, "started": "run-all"}
 
     @app.get("/api/report")
     def report(asil: str = "B"):

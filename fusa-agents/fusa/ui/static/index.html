@@ -78,6 +78,9 @@
   .finding .sev { text-transform: uppercase; font-size: 10px; letter-spacing: 1px; margin-right: 8px; }
   .sev.blocker { color: var(--c-gate_failed); } .sev.major { color: var(--c-rework); } .sev.minor { color: var(--dim); }
   .kv { color: var(--dim); font-size: 12px; margin: 4px 0; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px 14px; text-align: center;
+          color: var(--dim); cursor: pointer; margin: 8px 0 16px; }
+  .drop.hover, .drop:hover { border-color: var(--accent); color: var(--text); }
   h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 18px 0 6px; }
   table { border-collapse: collapse; font-size: 12px; }
   td, th { border: 1px solid var(--line); padding: 4px 9px; text-align: left; }
@@ -90,6 +93,7 @@
   <span id="model" class="badge">…</span>
   <span id="verdict" class="badge" title="release validation — click for blockers">…</span>
   <span class="spacer"></span>
+  <button id="inputs">⬆ Inputs</button>
   <button id="report">Validation report</button>
   <button id="aspice">ASPICE coverage</button>
   <button id="runall" class="primary">▶ Run all</button>
@@ -143,6 +147,40 @@ $("#verdict").onclick = () => {
     : `<p class="kv">All work products reviewed, gates passed, no pending markers, metric targets met.</p>`;
   $("#drawer").classList.add("open");
 };
+$("#inputs").onclick = async () => {
+  $("#d-title").textContent = "Inputs";
+  let files = [];
+  try { files = await api("/api/input"); } catch(e){}
+  $("#d-body").innerHTML = `
+    <div class="drop" id="drop">⬆ drop your FMEDA failure-modes CSV here, or click to choose<br>
+      <span class="kv">columns: element, mode, lam_fit, category, dc, safety_mechanism —
+      the file is validated, saved to input/, and the whole chain runs automatically</span></div>
+    <input type="file" id="csvfile" accept=".csv,text/csv" style="display:none">
+    <h3>input/</h3>` +
+    files.map(f => `<div class="finding">${esc(f.name)}
+      <span class="kv">${f.size} B · ${esc(f.modified)}</span></div>`).join("");
+  const drop = $("#drop"), inp = $("#csvfile");
+  drop.onclick = () => inp.click();
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add("hover"); };
+  drop.ondragleave = () => drop.classList.remove("hover");
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover");
+                       if (e.dataTransfer.files[0]) uploadCsv(e.dataTransfer.files[0]); };
+  inp.onchange = () => inp.files[0] && uploadCsv(inp.files[0]);
+  $("#drawer").classList.add("open");
+};
+async function uploadCsv(file){
+  logLine("[ui] uploading " + file.name + " …");
+  try {
+    const r = await api("/api/input/fmeda", {method:"POST", body: file,
+                                             headers: {"content-type": "text/csv"}});
+    logLine(`[ui] saved ${r.saved} (${r.rows} rows) — chain started, verdict will update when it finishes`);
+    $("#drawer").classList.remove("open");
+  } catch(e){
+    (Array.isArray(e.detail) ? e.detail : [e.detail || "upload failed"])
+      .forEach(d => logLine("[ui] upload rejected — " + d));
+  }
+}
+
 $("#report").onclick = async () => {
   try { const r = await api("/api/report", {method:"POST"}); logLine("[ui] validation report → " + r.markdown_path); }
   catch(e){ logLine("[ui] " + (e.detail || "report error")); }
