@@ -23,12 +23,18 @@ def main(argv: list[str] | None = None) -> int:
     ri = sub.add_parser("import-reqif", help="ReqIF -> work product"); ri.add_argument("file"); ri.add_argument("--work-product", required=True); ri.add_argument("--prefix", required=True); ri.add_argument("--id-attribute")
     re_ = sub.add_parser("export-reqif", help="work product -> ReqIF"); re_.add_argument("work_product"); re_.add_argument("--out")
     m = sub.add_parser("metrics", help="compute SPFM/LFM/PMHF from a failure-mode CSV"); m.add_argument("csv"); m.add_argument("--asil", default="B")
+    t = sub.add_parser("template", help="write the safety-requirements Excel template"); t.add_argument("--out", default="safety-requirements-template.xlsx")
     a = p.parse_args(argv)
 
     if a.cmd == "ui":
         from .ui import server
         print(f"FuSa dashboard on http://{a.host}:{a.port}  (dry_run={a.dry_run or None})")
         server.serve(host=a.host, port=a.port, dry_run=a.dry_run or None)
+        return 0
+
+    if a.cmd == "template":
+        from .tools import reqtable
+        print(reqtable.write_template(a.out))
         return 0
 
     if a.cmd == "metrics":

@@ -1,7 +1,23 @@
+import json
 from pathlib import Path
 from fusa.models import Status
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# A report with one CWE-tagged error and one note-level finding — the shipped
+# sample scan is clean (pressure.c was fixed), so routing is tested with this fixture.
+VULN_SARIF = {"runs": [{
+    "tool": {"driver": {"name": "semgrep", "rules": [
+        {"id": "insecure-use-memcpy", "properties": {"tags": ["security", "CWE-120"]}},
+        {"id": "magic-number", "defaultConfiguration": {"level": "note"}}]}},
+    "results": [
+        {"ruleId": "insecure-use-memcpy", "level": "error",
+         "message": {"text": "memcpy with attacker-controlled length"},
+         "locations": [{"physicalLocation": {"artifactLocation": {"uri": "input/src/pressure.c"},
+                                             "region": {"startLine": 5}}}]},
+        {"ruleId": "magic-number", "message": {"text": "magic number 4095"},
+         "locations": [{"physicalLocation": {"artifactLocation": {"uri": "input/src/pressure.c"},
+                                             "region": {"startLine": 7}}}]}]}]}
 
 
 def test_reqif_import_roundtrip(tmp_path):
@@ -21,16 +37,19 @@ def _write(tmp_path, xml):
     p = tmp_path / "x.reqif"; p.write_text(xml, encoding="utf-8"); return p
 
 
-def test_parsers():
+def test_parsers(tmp_path):
     from fusa.runners import parsers
     cpp = parsers.parse_cppcheck_xml(ROOT / "input/reports/cppcheck.xml")
     assert {f.severity for f in cpp} == {"error", "info"} and cpp[0].tags == ["CWE-788"]
-    sar = parsers.parse_sarif(ROOT / "input/reports/semgrep.sarif")
+    p = tmp_path / "vuln.sarif"
+    p.write_text(json.dumps(VULN_SARIF), encoding="utf-8")
+    sar = parsers.parse_sarif(p)
     assert sar[0].severity == "error" and "CWE-120" in sar[0].tags and sar[1].severity == "info"
 
 
 def test_runner_routes_security_finding_back_to_tara(workspace):
     from fusa.orchestrator import Orchestrator
+    (workspace / "input" / "reports" / "semgrep.sarif").write_text(json.dumps(VULN_SARIF), encoding="utf-8")
     orch = Orchestrator(root=workspace, dry_run=True)
     quiet = lambda *_: None
     orch.run("sys-sads", log=quiet); orch.run("cs-tara", log=quiet)

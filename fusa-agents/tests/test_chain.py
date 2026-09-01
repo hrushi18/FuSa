@@ -6,8 +6,8 @@ def test_dry_run_chain_reaches_review(workspace):
     orch = Orchestrator(root=workspace, dry_run=True)
     orch.run_all(log=lambda *_: None)
     for spec in orch.plan():
-        expected = Status.REWORK if spec.work_product == "TARA" else Status.REVIEWED   # sec-scan sends a CWE finding back to cs-tara
-        assert orch.reg.process.status(spec.work_product) == expected, spec.id
+        # shipped inputs are clean (see test_extensions for the CWE→cs-tara rework routing)
+        assert orch.reg.process.status(spec.work_product) == Status.REVIEWED, spec.id
     assert (workspace / "_generated" / "HW-FMEDA" / "metrics.md").exists()
 
 

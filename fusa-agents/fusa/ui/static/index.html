@@ -95,6 +95,7 @@
   <span class="spacer"></span>
   <button id="inputs">⬆ Inputs</button>
   <button id="report">Validation report</button>
+  <button id="reportx" title="Excel results workbook">⬇ Excel report</button>
   <button id="aspice">ASPICE coverage</button>
   <button id="runall" class="primary">▶ Run all</button>
 </header>
@@ -152,10 +153,12 @@ $("#inputs").onclick = async () => {
   let files = [];
   try { files = await api("/api/input"); } catch(e){}
   $("#d-body").innerHTML = `
-    <div class="drop" id="drop">⬆ drop your FMEDA failure-modes CSV here, or click to choose<br>
-      <span class="kv">columns: element, mode, lam_fit, category, dc, safety_mechanism —
+    <a href="/api/template/requirements"><button style="width:100%">⬇ Download safety-requirements template (.xlsx)</button></a>
+    <div class="drop" id="drop">⬆ drop your file here, or click to choose<br>
+      <span class="kv">.xlsx — filled safety-requirements template (23 columns, see its Description sheet)<br>
+      .csv — FMEDA failure modes (element, mode, lam_fit, category, dc, safety_mechanism)<br>
       the file is validated, saved to input/, and the whole chain runs automatically</span></div>
-    <input type="file" id="csvfile" accept=".csv,text/csv" style="display:none">
+    <input type="file" id="csvfile" accept=".csv,.xlsx,text/csv" style="display:none">
     <h3>input/</h3>` +
     files.map(f => `<div class="finding">${esc(f.name)}
       <span class="kv">${f.size} B · ${esc(f.modified)}</span></div>`).join("");
@@ -170,16 +173,19 @@ $("#inputs").onclick = async () => {
 };
 async function uploadCsv(file){
   logLine("[ui] uploading " + file.name + " …");
+  const isXlsx = file.name.toLowerCase().endsWith(".xlsx");
+  const url = isXlsx ? "/api/input/requirements" : "/api/input/fmeda";
+  const type = isXlsx ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv";
   try {
-    const r = await api("/api/input/fmeda", {method:"POST", body: file,
-                                             headers: {"content-type": "text/csv"}});
-    logLine(`[ui] saved ${r.saved} (${r.rows} rows) — chain started, verdict will update when it finishes`);
+    const r = await api(url, {method:"POST", body: file, headers: {"content-type": type}});
+    logLine(`[ui] saved ${r.saved} (${r.rows} rows${r.fusa_relevant !== undefined ? `, ${r.fusa_relevant} FuSa-relevant -> SYS-REQ` : ""}) — chain started`);
     $("#drawer").classList.remove("open");
   } catch(e){
     (Array.isArray(e.detail) ? e.detail : [e.detail || "upload failed"])
       .forEach(d => logLine("[ui] upload rejected — " + d));
   }
 }
+$("#reportx").onclick = () => window.open("/report.xlsx", "_blank");
 
 $("#report").onclick = async () => {
   try { const r = await api("/api/report", {method:"POST"}); logLine("[ui] validation report → " + r.markdown_path); }

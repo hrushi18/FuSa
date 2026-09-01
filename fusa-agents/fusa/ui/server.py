@@ -10,6 +10,9 @@
     GET  /api/aspice          base-practice coverage table (markdown)
     GET  /api/input           files under input/ (name, size, modified)
     POST /api/input/fmeda     upload failure-mode CSV (validated) -> saves + runs the chain
+    GET  /api/template/requirements   download the safety-requirements Excel template
+    POST /api/input/requirements      upload filled template -> SYS-REQ + runs the chain
+    GET  /report.xlsx         Excel results workbook (summary, requirements, evidence)
     GET  /api/report          live release validation (verdict + evidence)
     POST /api/report          same, and writes _generated/VALIDATION-REPORT.md
     GET  /report              printable HTML validation report (print -> PDF)
@@ -25,10 +28,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
+from ..models import Status
 from ..orchestrator import Orchestrator
 from ..report import render_html, validate, write_report
+from ..tools import reqtable
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 STATIC = Path(__file__).parent / "static"
 FMEDA_COLUMNS = ["element", "mode", "lam_fit", "category", "dc", "safety_mechanism"]
@@ -154,6 +161,41 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
         path.write_text(text, encoding="utf-8")
         runner.start("run-all (new FMEDA input)", lambda log: orch.run_all(log=log))
         return {"saved": str(path), "rows": rows, "started": "run-all"}
+
+    @app.get("/api/template/requirements")
+    def template():
+        return Response(reqtable.template_bytes(), media_type=XLSX,
+                        headers={"content-disposition": 'attachment; filename="safety-requirements-template.xlsx"'})
+
+    @app.post("/api/input/requirements", status_code=202)
+    async def upload_requirements(request: Request):
+        body = await request.body()
+        try:
+            rows = reqtable.parse(io.BytesIO(body))
+        except Exception:
+            raise HTTPException(status_code=400, detail=["not a readable .xlsx workbook"])
+        errors = reqtable.validate_rows(rows)
+        if not rows:
+            errors.append("no requirement rows found")
+        if errors:
+            raise HTTPException(status_code=400, detail=errors)
+        if runner.busy:
+            raise HTTPException(status_code=409, detail="a run is already in progress")
+        path = orch.root / "input" / "safety-requirements.xlsx"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+        wp_path = orch.reg.generated.write("SYS-REQ", reqtable.to_work_product(rows))
+        orch.reg.process.update("SYS-REQ", "reqtable-import", status=Status.GATE_PASSED, path=str(wp_path))
+        runner.start("run-all (new requirements input)", lambda log: orch.run_all(log=log))
+        return {"saved": str(path), "rows": len(rows), "fusa_relevant": len(reqtable.fusa_rows(rows)),
+                "work_product": "SYS-REQ", "started": "run-all"}
+
+    @app.get("/report.xlsx")
+    def report_xlsx(asil: str = "B"):
+        xls = orch.root / "input" / "safety-requirements.xlsx"
+        rows = reqtable.parse(xls) if xls.exists() else []
+        return Response(reqtable.results_bytes(validate(orch, asil=asil.upper()), rows), media_type=XLSX,
+                        headers={"content-disposition": 'attachment; filename="fusa-validation-report.xlsx"'})
 
     @app.get("/api/report")
     def report(asil: str = "B"):

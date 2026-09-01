@@ -37,8 +37,11 @@ python -m fusa import-reqif input/customer-requirements.reqif --work-product SYS
 python -m fusa export-reqif TSR                       # -> _generated/TSR/TSR.reqif
 python -m fusa aspice                                 # base-practice coverage over the status board
 python -m fusa report --asil B                        # release validation -> _generated/VALIDATION-REPORT.md (exit 1 if not releasable)
+python -m fusa template                               # write the 23-column safety-requirements Excel template (+ Description sheet)
 python -m fusa ui                                     # dashboard: live RELEASABLE/NOT RELEASABLE badge + printable report at /report
-                                                      #   ⬆ Inputs: drop your FMEDA failure-modes CSV — validated, saved to input/, chain re-runs automatically
+                                                      #   ⬆ Inputs: drop the filled requirements .xlsx (-> SYS-REQ) or FMEDA .csv — validated, saved, chain re-runs
+                                                      #   ⬇ Excel report: /report.xlsx — Summary (verdict + lifecycle: Item→HARA→Safety Goals→FSR→TSR→Design→Verification→Safety Validation),
+                                                      #      per-requirement validation status, work-product evidence, column descriptions
 pytest
 ```
 
