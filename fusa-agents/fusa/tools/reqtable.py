@@ -64,11 +64,11 @@ COLUMNS = [
 
 LIFECYCLE = [
     ("Item", "input/item-definition.md", None),
-    ("HARA", "SADS (hazards, ASIL classification)", "SADS"),
-    ("Safety Goals", "SADS (safety goals SG-nnn)", "SADS"),
+    ("HARA", "HARA (hazards HZ-nnn, S/E/C, ASIL classification)", "HARA"),
+    ("Safety Goals", "SADS (safety goals SG-nnn, parents in HARA)", "SADS"),
     ("FSR", "SYS-REQ (imported FSR rows), TSR agent input", "SYS-REQ"),
     ("TSR", "TSR work product", "TSR"),
-    ("Design", "TSC, SM-CATALOG", "TSC"),
+    ("Design", "TSC, SM-CATALOG, HSR, HW-DESIGN", "HW-DESIGN"),
     ("Verification", "SCA-REPORT, SEC-SCAN, independent review", "SEC-SCAN"),
     ("Safety Validation", "VALIDATION-REPORT (this workbook)", None),
 ]

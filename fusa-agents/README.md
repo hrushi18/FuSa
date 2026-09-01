@@ -113,8 +113,11 @@ clauses: 26262-4:6, 26262-8:6
 
 ## What is scaffolded vs. what you add
 
-Enabled in this scaffold: `sys-sads`, `sys-tsr`, `sm-catalog`, `sys-tsc`, `sys-fmea`, `hw-fmeda`, `cs-tara`,
-`sw-static-analysis`, `sec-scan`, `verification-review`; `SYS-REQ` via ReqIF import.
+Enabled in this scaffold: `sys-hara`, `sys-sads`, `sys-tsr`, `sm-catalog`, `sys-tsc`, `sys-fmea`, `hw-hsr`,
+`hw-design`, `hw-fmeda`, `cs-tara`, `sw-static-analysis`, `sec-scan`, `verification-review`; `SYS-REQ` via
+ReqIF or Excel-template import. The chain demonstrates the full lifecycle: Item (input) → HARA (`HZ-nnn`,
+S/E/C, ASIL) → Safety Goals (SADS `SG-nnn`, parents in HARA) → FSR (SYS-REQ) → TSR → Design (TSC,
+SM-CATALOG, HSR, HW-DESIGN) → Verification (scans + independent review) → Safety Validation (report).
 The remaining agents are declared with `enabled: false` so the plan, the PENDING owners and the coverage
 graph are already complete. `_clause-register/*.yaml` ships clause ids and topic labels only — fill `text`
 from your licensed copy of the standard. FTA and DFA method files are placeholders.

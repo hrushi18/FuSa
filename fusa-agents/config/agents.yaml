@@ -4,10 +4,22 @@
 
 agents:
   # ── 1 · Concept & Requirements ────────────────────────────────────────────
+  - id: sys-hara
+    work_product: HARA
+    title: Hazard Analysis and Risk Assessment (assumed, SEooC)
+    phase: 1
+    inputs: [item-definition.md]
+    clauses: ["26262-3:6", "26262-3:6.4.4", "26262-3:6.4.6"]
+    method: hara
+    conventions: [ids, document-structure]
+    checklist: HARA
+    item_prefixes: [HZ]
+
   - id: sys-sads
     work_product: SADS
     title: SEooC Assumptions & Definitions Specification (assumed item, assumed safety goals)
     phase: 1
+    requires: [HARA]
     inputs: [item-definition.md]
     clauses: ["26262-3:5", "26262-3:6", "26262-10:9"]
     method: seooc-assumptions
@@ -69,7 +81,6 @@ agents:
     method: requirements-authoring
     conventions: [ids, document-structure]
     checklist: generic
-    enabled: false
 
   - id: sw-ssr
     work_product: SSR
@@ -99,7 +110,7 @@ agents:
   - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
 
   # ── 3 · Hardware Level Analysis ───────────────────────────────────────────
-  - {id: hw-design, work_product: HW-DESIGN, title: Hardware Design Specification, phase: 3, requires: [HSR], clauses: ["26262-5:7"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+  - {id: hw-design, work_product: HW-DESIGN, title: Hardware Design Specification, phase: 3, requires: [HSR], clauses: ["26262-5:7"], method: requirements-authoring, conventions: [ids], checklist: generic}
   - {id: hw-fmea,   work_product: HW-FMEA,   title: Hardware FMEA, phase: 3, requires: [HW-DESIGN, SM-CATALOG], clauses: ["26262-5:7.4.3"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false}
   - {id: hw-fta,    work_product: HW-FTA,    title: Hardware FTA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-5:7.4.3"], method: fta, conventions: [ids], checklist: generic, enabled: false}
   - {id: hw-dfa,    work_product: HW-DFA,    title: Hardware DFA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false}

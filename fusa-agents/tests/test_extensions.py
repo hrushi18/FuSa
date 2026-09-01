@@ -52,7 +52,7 @@ def test_runner_routes_security_finding_back_to_tara(workspace):
     (workspace / "input" / "reports" / "semgrep.sarif").write_text(json.dumps(VULN_SARIF), encoding="utf-8")
     orch = Orchestrator(root=workspace, dry_run=True)
     quiet = lambda *_: None
-    orch.run("sys-sads", log=quiet); orch.run("cs-tara", log=quiet)
+    orch.run("sys-hara", log=quiet); orch.run("sys-sads", log=quiet); orch.run("cs-tara", log=quiet)
     assert orch.reg.process.status("TARA") == Status.REVIEWED
     assert orch.run("sec-scan", log=quiet) == Status.REVIEWED
     assert orch.reg.process.status("TARA") == Status.REWORK          # CWE-tagged finding → cs-tara

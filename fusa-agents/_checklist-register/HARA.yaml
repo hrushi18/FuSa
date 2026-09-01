@@ -1,0 +1,8 @@
+work_product: HARA
+items:
+  - {id: HARA-01, text: every hazard names function, malfunction, hazardous event and operational situation, clause: "26262-3:6.4.2", check: review}
+  - {id: HARA-02, text: each hazard carries S, E, C with a stated rationale for each value,                  clause: "26262-3:6.4.3", check: review}
+  - {id: HARA-03, text: ASIL follows from the S×E×C table (no re-derivation, no skipped rows),              clause: "26262-3:6.4.4", check: review}
+  - {id: HARA-04, text: QM classifications are recorded with rationale, not silently dropped,               clause: "26262-3:6.4.4", check: review}
+  - {id: HARA-05, text: operational situations are stated as SEooC assumptions the integrator can confirm,  clause: "26262-10:9",   check: review}
+  - {id: HARA-06, text: HZ ids are unique and follow convention,                                            clause: "26262-8:6",    check: structural}

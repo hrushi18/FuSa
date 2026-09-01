@@ -31,6 +31,7 @@ def test_feedback_loop_sets_upstream_to_rework(workspace, monkeypatch):
     from fusa.orchestrator import Orchestrator
     import fusa.agents.base as base
     orch = Orchestrator(root=workspace, dry_run=True)
+    orch.run("sys-hara", log=lambda *_: None)
     orch.run("sys-sads", log=lambda *_: None)
     # make the TSR reviewer send a finding upstream
     monkeypatch.setattr(base.ReviewAgent, "_dry_stub", lambda self, c: (

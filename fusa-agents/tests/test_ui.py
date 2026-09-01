@@ -38,6 +38,9 @@ def test_plan_returns_creation_order(client):
 
 
 def test_run_agent_executes_and_status_reflects_it(client):
+    r = client.post("/api/run/sys-hara")
+    assert r.status_code == 202
+    wait_idle(client)
     r = client.post("/api/run/sys-sads")
     assert r.status_code == 202
     wait_idle(client)
