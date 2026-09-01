@@ -8,6 +8,9 @@
     GET  /api/logs?since=N    log lines appended since N (long-poll style)
     GET  /api/wp/{WP}         generated markdown + record (+ metrics.md if present)
     GET  /api/aspice          base-practice coverage table (markdown)
+    GET  /api/report          live release validation (verdict + evidence)
+    POST /api/report          same, and writes _generated/VALIDATION-REPORT.md
+    GET  /report              printable HTML validation report (print -> PDF)
     POST /api/run/{agent-id}  run one agent in the background (409 while busy)
     POST /api/run-all         walk the dependency sequence in the background
 """
@@ -17,9 +20,10 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from ..orchestrator import Orchestrator
+from ..report import render_html, validate, write_report
 
 STATIC = Path(__file__).parent / "static"
 
@@ -103,6 +107,19 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
     @app.get("/api/aspice")
     def aspice():
         return {"table": orch.aspice()}
+
+    @app.get("/api/report")
+    def report(asil: str = "B"):
+        return validate(orch, asil=asil.upper()).model_dump(mode="json")
+
+    @app.post("/api/report")
+    def report_write(asil: str = "B"):
+        rep = validate(orch, asil=asil.upper())
+        return rep.model_dump(mode="json") | {"markdown_path": str(write_report(orch, rep))}
+
+    @app.get("/report")
+    def report_page(asil: str = "B"):
+        return HTMLResponse(render_html(validate(orch, asil=asil.upper())))
 
     @app.post("/api/run/{agent_id}", status_code=202)
     def run(agent_id: str):

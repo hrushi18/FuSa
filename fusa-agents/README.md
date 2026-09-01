@@ -36,6 +36,8 @@ python -m fusa metrics input/fmeda-failure-modes.csv --asil D
 python -m fusa import-reqif input/customer-requirements.reqif --work-product SYS-REQ --prefix CR --id-attribute req_id
 python -m fusa export-reqif TSR                       # -> _generated/TSR/TSR.reqif
 python -m fusa aspice                                 # base-practice coverage over the status board
+python -m fusa report --asil B                        # release validation -> _generated/VALIDATION-REPORT.md (exit 1 if not releasable)
+python -m fusa ui                                     # dashboard: live RELEASABLE/NOT RELEASABLE badge + printable report at /report
 pytest
 ```
 

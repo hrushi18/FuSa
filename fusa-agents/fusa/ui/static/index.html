@@ -24,6 +24,9 @@
            border: 1px solid var(--line); color: var(--dim); }
   .badge.dry { color: var(--c-blocked); border-color: var(--c-blocked); }
   .badge.live { color: var(--c-reviewed); border-color: var(--c-reviewed); }
+  #verdict { cursor: pointer; }
+  .badge.rel { color: var(--c-reviewed); border-color: var(--c-reviewed); }
+  .badge.norel { color: var(--c-gate_failed); border-color: var(--c-gate_failed); }
   .spacer { flex: 1; }
   button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
            border-radius: 6px; padding: 6px 14px; font: inherit; cursor: pointer; }
@@ -85,7 +88,9 @@
   <h1>Fu<span>Sa</span> Agent Framework <span style="color:var(--dim);font-size:12px">ISO 26262 / SEooC</span></h1>
   <span id="mode" class="badge">…</span>
   <span id="model" class="badge">…</span>
+  <span id="verdict" class="badge" title="release validation — click for blockers">…</span>
   <span class="spacer"></span>
+  <button id="report">Validation report</button>
   <button id="aspice">ASPICE coverage</button>
   <button id="runall" class="primary">▶ Run all</button>
 </header>
@@ -120,7 +125,32 @@ async function loadMeta(){
   $("#model").textContent = m.model;
 }
 
+let lastReport = null;
+async function loadVerdict(){
+  try {
+    lastReport = await api("/api/report");
+    const ok = lastReport.verdict === "RELEASABLE";
+    $("#verdict").textContent = ok ? "RELEASABLE" : `NOT RELEASABLE · ${lastReport.reasons.length}`;
+    $("#verdict").className = "badge " + (ok ? "rel" : "norel");
+  } catch(e){ /* server restarting */ }
+}
+$("#verdict").onclick = () => {
+  if (!lastReport) return;
+  $("#d-title").textContent = "Release validation — " + lastReport.verdict;
+  $("#d-body").innerHTML = lastReport.reasons.length
+    ? `<h3>Release blockers</h3>` + lastReport.reasons.map(r =>
+        `<div class="finding"><span class="sev major">block</span>${esc(r)}</div>`).join("")
+    : `<p class="kv">All work products reviewed, gates passed, no pending markers, metric targets met.</p>`;
+  $("#drawer").classList.add("open");
+};
+$("#report").onclick = async () => {
+  try { const r = await api("/api/report", {method:"POST"}); logLine("[ui] validation report → " + r.markdown_path); }
+  catch(e){ logLine("[ui] " + (e.detail || "report error")); }
+  window.open("/report", "_blank");
+};
+
 async function refresh(){
+  loadVerdict();
   agents = await api("/api/agents");
   const byPhase = {};
   for (const a of agents) (byPhase[a.phase] ??= []).push(a);

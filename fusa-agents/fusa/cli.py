@@ -18,6 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status", help="live status board")
     g = sub.add_parser("gate", help="re-run structural gate on a work product"); g.add_argument("work_product")
     sub.add_parser("aspice", help="ASPICE base-practice coverage from the status board")
+    rp = sub.add_parser("report", help="release validation -> _generated/VALIDATION-REPORT.md (exit 1 if not releasable)"); rp.add_argument("--asil", default="B")
     u = sub.add_parser("ui", help="serve the demo dashboard"); u.add_argument("--host", default="127.0.0.1"); u.add_argument("--port", type=int, default=8000)
     ri = sub.add_parser("import-reqif", help="ReqIF -> work product"); ri.add_argument("file"); ri.add_argument("--work-product", required=True); ri.add_argument("--prefix", required=True); ri.add_argument("--id-attribute")
     re_ = sub.add_parser("export-reqif", help="work product -> ReqIF"); re_.add_argument("work_product"); re_.add_argument("--out")
@@ -50,6 +51,14 @@ def main(argv: list[str] | None = None) -> int:
         print(orch.status())
     elif a.cmd == "aspice":
         print(orch.aspice())
+    elif a.cmd == "report":
+        from .report import validate, write_report
+        rep = validate(orch, asil=a.asil.upper())
+        print(f"{rep.verdict}  (ASIL {rep.asil})")
+        for reason in rep.reasons:
+            print(f"  - {reason}")
+        print(write_report(orch, rep))
+        return 0 if rep.verdict == "RELEASABLE" else 1
     elif a.cmd == "import-reqif":
         from .adapters import reqif
         objs = reqif.parse(a.file)
