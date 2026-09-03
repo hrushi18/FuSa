@@ -1,0 +1,10 @@
+# Threat scenarios (ISO/SAE 21434 clause 15.4-15.9). risk is NOT stated here: it is looked up
+# from _reference-register/risk-matrix.yaml using the worst impact x the feasibility.
+# stride: S|T|R|I|D|E   feasibility: very low | low | medium | high
+# impact_*: negligible | moderate | major | severe   treatment: avoid | reduce | share | retain
+id,asset,stride,attack_path,feasibility,impact_safety,impact_financial,impact_operational,impact_privacy,safety_goal,rationale,treatment
+TS-001,AS-001,T,attacker with bus access injects a spoofed pressure frame,medium,severe,moderate,major,negligible,SG-001,requires physical bus access and knowledge of the frame layout; no key needed today,reduce
+TS-002,AS-002,D,attacker floods the bus so the pressure frame misses its slot,medium,major,negligible,major,negligible,SG-003,bus flooding needs physical access but no protocol knowledge,reduce
+TS-003,AS-003,T,attacker rewrites calibration flash over an unauthenticated diagnostic session,low,severe,major,moderate,negligible,SG-002,needs diagnostic access and a valid routine; specialist equipment,reduce
+TS-004,AS-004,E,attacker escalates from an open diagnostic session to a write routine,low,major,major,moderate,moderate,SG-002,requires knowledge of the routine identifiers,reduce
+TS-005,AS-003,I,attacker reads calibration coefficients to clone the module,high,negligible,moderate,negligible,negligible,,coefficients are readable without authentication,retain

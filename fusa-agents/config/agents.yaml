@@ -110,6 +110,7 @@ agents:
     conventions: [ids, document-structure]
     checklist: FMEA
     item_prefixes: [SFM]
+    generator: {kind: fmea, input: failure-modes.csv, elements_from: TSC, returns_to: sys-tsc}
 
   - {id: sys-fta, work_product: SYS-FTA, title: System FTA, phase: 2, requires: [TSC], clauses: ["26262-4:7.4.3", "26262-9:8"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [FTA]}
   - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [DFA]}
@@ -162,6 +163,7 @@ agents:
     conventions: [ids, document-structure]
     checklist: TARA
     item_prefixes: [AS, TS]
+    generator: {kind: tara, input: assets.csv, threats: threat-scenarios.csv, goals_agent: cs-goals}
 
   - {id: cs-goals, work_product: CSG, title: Cybersecurity Goals and Concept, phase: 1, requires: [TARA], covers: [TARA],
      clauses: ["21434:9.4", "21434:9.5"], method: requirements-authoring, conventions: [ids, document-structure], checklist: generic, enabled: false}

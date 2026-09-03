@@ -248,7 +248,129 @@ def _concept_intro(spec: AgentSpec, rows: list[Row]) -> str:
     return "\n".join(lines)
 
 
+RISK_MATRIX_FILE = "risk-matrix.yaml"
+FMEA_COLUMNS = ["element", "function", "failure_mode", "local_effect", "item_effect", "classification"]
+ASSET_COLUMNS = ["property", "damage_scenario"]
+THREAT_COLUMNS = ["asset", "stride", "attack_path", "feasibility", "rationale", "treatment"]
+IMPACT_CATEGORIES = ["safety", "financial", "operational", "privacy"]
+IMPACT_ORDER = ["negligible", "moderate", "major", "severe"]
+
+
+def generate_fmea(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """One row per failure mode. A mode with no mechanism and a violated goal is *uncovered*:
+    it stays visible, carries `finding: uncovered`, and returns to the design agent — the
+    framework's own feedback loop, triggered by a fact in the table rather than by a judgement."""
+    rows = read_table(config.INPUT_DIR / cfg.get("input", "failure-modes.csv"), FMEA_COLUMNS)
+    goals = {i.id for wp in ("SADS",) if reg.generated.exists(wp) for i in reg.generated.items(wp)}
+    covered_elements = {i.fields.get("element", "") for wp in (cfg.get("elements_from", "TSC"),)
+                        if reg.generated.exists(wp) for i in reg.generated.items(wp)}
+
+    out, pending, seen_elements = [], [], set()
+    for rec in rows:
+        seen_elements.add(rec["element"])
+        sm, violated = rec.get("sm", "").strip(), rec.get("violated_sg", "").strip().upper()
+        fields = {k: rec[k] for k in FMEA_COLUMNS}
+        fields["classification"] = rec["classification"].strip().upper()
+        fields["violated_sg"] = violated
+        fields["sm"] = sm
+        fields["rationale"] = rec.get("rationale", "")
+        if violated and not sm:                       # uncovered: named, not quietly dropped
+            fields["finding"] = "uncovered"
+            fields["returns_to"] = cfg.get("returns_to", "sys-tsc")
+        if violated and goals and violated not in goals:
+            pending.append(f"row {rec['_row']} violates {violated}, which is not a safety goal <- project")
+        out.append(Row(id=rec.get("id") or None, fields=fields))
+    for element in sorted(covered_elements - seen_elements):
+        if element:
+            pending.append(f"element '{element}' is allocated in {cfg.get('elements_from', 'TSC')} "
+                           f"but has no failure-mode row <- project")
+    return Result(rows=out, pending=pending)
+
+
+def load_risk_matrix(reg: Registers) -> dict[str, dict[str, int]]:
+    """impact × feasibility → risk. House policy, so it ships filled — but it ships as data,
+    looked up and never re-derived (see the TARA method)."""
+    path = Path(reg.reference.path) / RISK_MATRIX_FILE
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {str(k).strip().lower(): {str(fk).strip().lower(): v for fk, v in (fv or {}).items()}
+            for k, fv in (data.get("matrix") or {}).items()}
+
+
+def generate_tara(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """Assets and threat scenarios; risk looked up from the house matrix.
+
+    The overall impact is the worst of the four ISO/SAE 21434 categories, so the rating that
+    drives the risk is derived from the four the analyst actually gave rather than restated.
+    """
+    matrix = load_risk_matrix(reg)
+    goals = {i.id for wp in ("SADS",) if reg.generated.exists(wp) for i in reg.generated.items(wp)}
+    assets = read_table(config.INPUT_DIR / cfg.get("input", "assets.csv"), ASSET_COLUMNS)
+    threats = _optional_table(cfg.get("threats", "threat-scenarios.csv"), THREAT_COLUMNS)
+
+    out, pending = [], []
+    if not matrix:
+        pending.append(f"impact × feasibility matrix empty — fill _reference-register/{RISK_MATRIX_FILE} <- project")
+    by_name: dict[str, Row] = {}
+    for rec in assets:
+        row = Row(id=rec.get("id") or None, prefix="AS", fields={
+            "text": rec.get("text") or rec.get("name", ""),
+            "property": rec["property"],
+            "damage_scenario": rec["damage_scenario"],
+        })
+        out.append(row)
+        by_name[(rec.get("id") or rec.get("name", "")).strip().upper()] = row
+
+    treated = []
+    for rec in threats:
+        key = rec["asset"].strip().upper()
+        asset = by_name.get(key)
+        if asset is None:
+            pending.append(f"row {rec['_row']} attacks '{rec['asset']}', which is not an asset <- project")
+            continue
+        impacts = {c: (rec.get(f"impact_{c}", "") or "negligible").strip().lower() for c in IMPACT_CATEGORIES}
+        unknown = [v for v in impacts.values() if v not in IMPACT_ORDER]
+        worst = max(impacts.values(), key=lambda v: IMPACT_ORDER.index(v)) if not unknown else None
+        feasibility = rec["feasibility"].strip().lower()
+        risk = matrix.get(worst or "", {}).get(feasibility)
+        note = None
+        if unknown:
+            note = f"[PENDING: impact rating {', '.join(sorted(set(unknown)))} is not one of " \
+                   f"{', '.join(IMPACT_ORDER)} <- project]"
+        elif risk is None:
+            note = f"[PENDING: risk for impact {worst} × feasibility {feasibility} is not in the " \
+                   f"house matrix <- project]"
+        safety_goal = rec.get("safety_goal", "").strip().upper()
+        if impacts["safety"] != "negligible" and not safety_goal:
+            note = (note or "") + f"\n[PENDING: safety impact {impacts['safety']} cites no safety goal <- project]"
+        elif safety_goal and goals and safety_goal not in goals:
+            note = (note or "") + f"\n[PENDING: {safety_goal} is not a safety goal <- project]"
+        row = Row(id=rec.get("id") or None, prefix="TS", parent_of=asset, fields={
+            "parent": "",                          # filled from the asset once ids are assigned
+            "stride": rec["stride"],
+            "attack_path": rec["attack_path"],
+            "feasibility": feasibility,
+            "impact": ", ".join(f"{c[0].upper()}={impacts[c]}" for c in IMPACT_CATEGORIES),
+            **{f"impact_{c}": impacts[c] for c in IMPACT_CATEGORIES},
+            "safety_goal": safety_goal,
+            "risk": str(risk) if risk is not None else "",
+            "risk_basis": f"impact {worst} × feasibility {feasibility} from the house matrix" if risk else "",
+            "rationale": rec["rationale"],
+            "treatment": rec["treatment"].strip().lower(),
+        }, note=note)
+        out.append(row)
+        if row.fields["treatment"] in ("avoid", "reduce", "share"):
+            treated.append(row)
+
+    if treated:
+        pending.append(f"cybersecurity goal derivation for {len(treated)} treated threat scenario(s) "
+                       f"<- {cfg.get('goals_agent', 'cs-goals')}")
+    return Result(rows=out, pending=pending)
+
+
 GENERATORS = {"hara": generate_hara, "safety-goals": generate_safety_goals,
               "safety-mechanisms": generate_safety_mechanisms,
               "technical-requirements": generate_technical_requirements,
-              "safety-concept": generate_safety_concept}
+              "safety-concept": generate_safety_concept,
+              "fmea": generate_fmea, "tara": generate_tara}

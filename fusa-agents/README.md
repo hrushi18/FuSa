@@ -30,7 +30,7 @@ FUSA_DRY_RUN=1 python -m fusa run-all      # whole chain offline, deterministic 
 export ANTHROPIC_API_KEY=...               # then for real:
 python -m fusa run sys-sads                # one agent: author → gate → independent review
 python -m fusa --reviewer rules run-all    # review by executing the checklist — deterministic, no key
-python -m fusa --author deterministic --reviewer rules run-all   # HARA→SADS→TSR→SM-CATALOG→TSC from input tables: no model at all
+python -m fusa --author deterministic --reviewer rules run-all   # 7 work products from input tables: no model at all
 python -m fusa run-all
 python -m fusa status                      # live board
 python -m fusa gate TSC                    # re-run the structural gate on a work product
@@ -73,10 +73,10 @@ are also settable live in the dashboard (**⚙ LLM**), or once in a gitignored `
 | One id convention, no id ever throws | `ids.canonical` is the single spelling rule (`sr-1` → `SR-001`) used at both boundaries — `reqtable.normalise_ids` for the spreadsheet, `ids.normalise_items` for authored work products. Blanks are assigned, repeats renumbered, junk replaced; every change is reported, none is an error. `fusa gate` also works on an imported work product (`SYS-REQ`), which has no agent |
 | Ids belong to the framework, not the model | `ids.normalise_items` runs on every authored draft before the gate: `### HZ-nnn` placeholders are numbered, `HZ-1` padded, duplicates renumbered, `## HZ-002 — title` recovered into an item + `- title:`, and an id owned by another work product (`AOU` in a HARA) is demoted to commentary naming its owner instead of failing the run |
 | Independent review | `ReviewAgent` is constructed on `ConventionsView`, which has no `.method()`; asserted in code and in tests |
-| Authoring without a model | `--author deterministic` (or `FUSA_AUTHOR=deterministic`) renders a work product from engineer-authored tables where a `generator:` is declared. Five are shipped: `hazards.csv` → HARA (ASIL by S×E×C lookup), + `safety-goals.csv`/`assumptions.csv` → SADS, + `technical-requirements.csv` → TSR, `safety-mechanisms.csv` → SM-CATALOG, + `allocation.csv` → TSC (with its Mermaid view drawn from the same rows). Judgement stays with the engineer, in a file that is diffable and reviewable; anything not decided is `[PENDING: … <- project]`, never a plausible default. Agents with no generator still use the model |
+| Authoring without a model | `--author deterministic` (or `FUSA_AUTHOR=deterministic`) renders a work product from engineer-authored tables where a `generator:` is declared. Seven are shipped: `hazards.csv` → HARA (ASIL by S×E×C lookup), + `safety-goals.csv`/`assumptions.csv` → SADS, + `technical-requirements.csv` → TSR, `safety-mechanisms.csv` → SM-CATALOG, + `allocation.csv` → TSC (Mermaid view drawn from the same rows), + `failure-modes.csv` → SYS-FMEA, `assets.csv`/`threat-scenarios.csv` → TARA (risk from the house matrix). Judgement stays with the engineer, in a file that is diffable and reviewable; anything not decided is `[PENDING: … <- project]`, never a plausible default. Agents with no generator still use the model |
 | Derived, not restated | a generated TSR inherits `asil` and `safe_state` from its parent goal and assembles its sentence from the method's own pattern; a TSC item reads `ftti` through the requirement to that goal, so the time-budget check compares the allocation against the goal that set it. A goal with no requirement, or a requirement with no allocation, is reported rather than left silent |
 | Review without a model | `--reviewer rules` (or `FUSA_REVIEWER=rules`) executes the checklist instead of reading it to an LLM: 22 of the 34 judgement items carry a `rule:` and are decided deterministically; the rest become `minor` findings naming the clause, so the confirmation review a person owes (26262-8 §9) is visible rather than implied |
-| Feedback loop | a reviewer finding with `returns_to: <agent>` puts that upstream work product into `REWORK` |
+| Feedback loop | a reviewer finding with `returns_to: <agent>` puts that upstream work product into `REWORK` — and a generated FMEA fires the same loop from a fact, not an opinion: a failure mode with a violated safety goal and no `sm` is flagged `finding: uncovered` and returns to `sys-tsc` |
 
 ## V-cycle coverage — three kinds of building block
 

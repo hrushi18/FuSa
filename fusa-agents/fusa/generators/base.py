@@ -27,6 +27,7 @@ class Row:
     id: str | None = None
     prefix: str = ""
     note: str | None = None                       # free text under the bullets, e.g. a PENDING
+    parent_of: "Row | None" = None                # link to another row; resolved once ids exist
 
 
 @dataclass
@@ -108,6 +109,9 @@ class GeneratorAgent:
                 used[r.prefix] = used.get(r.prefix, 0) + 1
                 r.id = f"{r.prefix}-{used[r.prefix]:03d}"
             seen.add(r.id)
+        for r in rows:                            # links are made after every id is known
+            if r.parent_of is not None:
+                r.fields["parent"] = r.parent_of.id
 
     def _render(self, result: Result) -> str:
         s = self.spec

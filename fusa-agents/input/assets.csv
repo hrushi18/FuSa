@@ -1,0 +1,7 @@
+# Cybersecurity assets (ISO/SAE 21434 clause 15.3).
+# property: confidentiality | integrity | availability | authenticity
+id,name,property,damage_scenario,text
+AS-001,pressure signal on CAN,integrity,a forged pressure value causes the brake ECU to boost incorrectly,The pressure value and its status word as transmitted on the vehicle CAN bus.
+AS-002,pressure signal on CAN,availability,suppressed frames leave the brake ECU without a pressure value,Continuous availability of the periodic pressure frame.
+AS-003,calibration data in flash,integrity,altered calibration silently biases every reading,Factory calibration coefficients stored in the module's flash.
+AS-004,diagnostic session,authenticity,an unauthenticated tester writes calibration or clears fault memory,The UDS diagnostic access to the module.

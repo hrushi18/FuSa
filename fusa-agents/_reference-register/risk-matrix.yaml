@@ -1,0 +1,15 @@
+# Cybersecurity risk matrix — HOUSE CONVENTION (ISO/SAE 21434 clause 15.9).
+#
+# Unlike the ASIL table, this matrix is not normative: ISO/SAE 21434 requires a risk
+# determination method, it does not prescribe one. The values below are this organisation's
+# policy and should be reviewed and agreed like any other convention — change them here and
+# every TARA follows, because cs-tara looks the value up and never re-derives it.
+#
+# impact:      negligible | moderate | major | severe   (the worst of safety/financial/operational/privacy)
+# feasibility: very low | low | medium | high            (attack potential)
+# risk:        1 (lowest) .. 5 (highest)
+matrix:
+  negligible: {very low: 1, low: 1, medium: 1, high: 1}
+  moderate:   {very low: 1, low: 2, medium: 2, high: 3}
+  major:      {very low: 2, low: 3, medium: 4, high: 4}
+  severe:     {very low: 2, low: 3, medium: 4, high: 5}
