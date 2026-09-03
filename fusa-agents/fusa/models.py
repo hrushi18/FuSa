@@ -28,6 +28,7 @@ class AgentSpec(BaseModel):
     title: str
     phase: int                              # 1..7 as in the diagram
     kind: Literal["authoring", "review", "runner"] = "authoring"
+    generator: dict | None = None           # deterministic authoring: {kind, input, …} (see fusa/generators)
     requires: list[str] = Field(default_factory=list)   # upstream work products
     covers: list[str] = Field(default_factory=list)     # upstream WPs every item of which must have a child here
     item_prefixes: list[str] = Field(default_factory=list)  # allowed `### PREFIX-nnn` ids; default [work_product]

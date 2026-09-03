@@ -52,7 +52,7 @@ def prefix_owners(specs: list[AgentSpec]) -> dict[str, tuple[str, str]]:
     return out
 
 
-def build_agents(specs: list[AgentSpec], registers: Registers, llm: LLM) -> dict:
+def build_agents(specs: list[AgentSpec], registers: Registers, llm: LLM, author: str = "model") -> dict:
     owners = {s.work_product: s.id for s in specs}
     by_prefix = prefix_owners(specs)
     agents: dict[str, AuthoringAgent] = {}
@@ -62,6 +62,10 @@ def build_agents(specs: list[AgentSpec], registers: Registers, llm: LLM) -> dict
         if s.kind == "runner":
             from ..runners import ToolRunnerAgent
             agents[s.id] = ToolRunnerAgent(s, registers, llm.dry_run)
+            continue
+        if author == "deterministic" and s.generator:   # no model where a table can decide it
+            from ..generators import GeneratorAgent
+            agents[s.id] = GeneratorAgent(s, registers)
             continue
         a = AuthoringAgent(s, registers, llm)
         a._owners = owners

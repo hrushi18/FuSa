@@ -1,0 +1,46 @@
+# ASIL determination — ISO 26262-3, clause 6.4.4 (S x E x C).
+#
+# The framework ships the KEYS ONLY, exactly as _clause-register/*.yaml ships clause ids without
+# their text: the determination table is normative content from the standard, so fill the values
+# from your own licensed copy. Until then, sys-hara leaves [PENDING: asil for Sx-Ey-Cz] on any
+# hazard whose combination is blank, or uses an `asil` column supplied in input/hazards.csv.
+#
+# Allowed values: QM, A, B, C, D.
+# S0, E0 and C0 are QM by the definition of those classes and are handled in code, not listed here.
+table:
+  S1-E1-C1: ""
+  S1-E1-C2: ""
+  S1-E1-C3: ""
+  S1-E2-C1: ""
+  S1-E2-C2: ""
+  S1-E2-C3: ""
+  S1-E3-C1: ""
+  S1-E3-C2: ""
+  S1-E3-C3: ""
+  S1-E4-C1: ""
+  S1-E4-C2: ""
+  S1-E4-C3: ""
+  S2-E1-C1: ""
+  S2-E1-C2: ""
+  S2-E1-C3: ""
+  S2-E2-C1: ""
+  S2-E2-C2: ""
+  S2-E2-C3: ""
+  S2-E3-C1: ""
+  S2-E3-C2: ""
+  S2-E3-C3: ""
+  S2-E4-C1: ""
+  S2-E4-C2: ""
+  S2-E4-C3: ""
+  S3-E1-C1: ""
+  S3-E1-C2: ""
+  S3-E1-C3: ""
+  S3-E2-C1: ""
+  S3-E2-C2: ""
+  S3-E2-C3: ""
+  S3-E3-C1: ""
+  S3-E3-C2: ""
+  S3-E3-C3: ""
+  S3-E4-C1: ""
+  S3-E4-C2: ""
+  S3-E4-C3: ""

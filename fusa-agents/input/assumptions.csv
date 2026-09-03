@@ -1,0 +1,5 @@
+# Assumptions of use the integrator must confirm (ISO 26262-10 clause 9).
+text,confirmed_by
+The receiving ECU evaluates the status word in every received frame and does not use the pressure value when it is flagged invalid.,integrator
+The module is supplied from a regulated 12 V rail within 4.5-5.5 V at the sensor input.,integrator
+The module is mounted rigidly to the master cylinder so that vibration stays within the qualified profile.,integrator

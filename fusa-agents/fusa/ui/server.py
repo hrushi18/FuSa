@@ -111,7 +111,7 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
     @app.get("/api/meta")
     def meta():
         return {"dry_run": orch.llm.dry_run, "provider": orch.llm.provider, "model": orch.llm.model,
-                "reviewer": orch.reviewer_kind, "root": str(orch.root), "strict_pending": orch.strict}
+                "reviewer": orch.reviewer_kind, "author": orch.author_kind, "root": str(orch.root), "strict_pending": orch.strict}
 
     @app.get("/api/settings")
     def settings():

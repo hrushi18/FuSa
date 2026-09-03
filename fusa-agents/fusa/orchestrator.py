@@ -25,16 +25,17 @@ class UnknownAgent(LookupError):
 
 class Orchestrator:
     def __init__(self, root: Path | None = None, dry_run: bool | None = None, strict_pending: bool | None = None,
-                 reviewer: str | None = None):
+                 reviewer: str | None = None, author: str | None = None):
         self.root = Path(root or config.ROOT)
         self.reg = Registers.load(self.root)
         self.llm = LLM(dry_run=dry_run)
         self.reviewer_kind = reviewer or config.REVIEWER
+        self.author_kind = author or config.AUTHOR
         self.strict = config.STRICT_PENDING if strict_pending is None else strict_pending
         self.specs = load_specs(self.root / "config" / "agents.yaml")
         self.by_id = {s.id: s for s in self.specs}
         self.by_wp = {s.work_product: s for s in self.specs}
-        self.agents = build_agents(self.specs, self.reg, self.llm)
+        self.agents = build_agents(self.specs, self.reg, self.llm, self.author_kind)
         self.review_spec = next((s for s in self.specs if s.kind == "review"), None)
 
     # ---- planning ----------------------------------------------------------

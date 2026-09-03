@@ -12,6 +12,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true", help="no model calls; deterministic stub content")
     p.add_argument("--strict", action="store_true", help="block downstream while upstream has PENDING markers")
     p.add_argument("--reviewer", choices=["model", "rules"], help="independent review: an LLM, or the checklist's own rules (no API key)")
+    p.add_argument("--author", choices=["model", "deterministic"], help="authoring: an LLM, or generators over input tables where declared (no API key)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("plan", help="show creation order")
     r = sub.add_parser("run", help="run one agent"); r.add_argument("agent"); r.add_argument("--force", action="store_true"); r.add_argument("--no-review", action="store_true")
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from .agents.llm import LLMConfigError, LLMResponseError
     from .orchestrator import Orchestrator, UnknownAgent
-    orch = Orchestrator(dry_run=a.dry_run or None, strict_pending=a.strict or None, reviewer=a.reviewer)
+    orch = Orchestrator(dry_run=a.dry_run or None, strict_pending=a.strict or None, reviewer=a.reviewer, author=a.author)
     if orch.reg.process.load_warning:
         print(f"fusa: {orch.reg.process.load_warning}", file=sys.stderr)
     try:

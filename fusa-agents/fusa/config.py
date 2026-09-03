@@ -65,5 +65,9 @@ DRY_RUN = os.environ.get("FUSA_DRY_RUN", "0") == "1"
 # rules are executed — deterministic, no API key, judgement items raised for human sign-off).
 REVIEWER = os.environ.get("FUSA_REVIEWER", "model")
 
+# Authoring: "model" (an LLM writes the work product) or "deterministic" (a generator renders it
+# from input tables where one is declared; agents without a generator still use the model).
+AUTHOR = os.environ.get("FUSA_AUTHOR", "model")
+
 # Strict gating: a downstream agent may not start while an upstream has PENDING markers.
 STRICT_PENDING = os.environ.get("FUSA_STRICT_PENDING", "0") == "1"

@@ -1,0 +1,10 @@
+# Hazard analysis input — one row per function x malfunction the engineer identified.
+# severity S0-S3, exposure E0-E4, controllability C0-C3 (ISO 26262-3 clause 6.4.3).
+# `asil` is optional: leave it blank to derive from the S x E x C table, or state your
+# determination here. `id` is optional and pins the HZ id so later rows never renumber it.
+id,function,malfunction,hazardous_event,situation,severity,exposure,controllability,rationale,asil
+HZ-001,measure master-cylinder pressure,reports pressure lower than actual,brake ECU under-boosts and stopping distance increases,highway braking on a wet surface,S3,E4,C3,S3 loss of braking causes life-threatening injury; E4 highway braking is continuous; C3 driver cannot compensate for reduced boost,D
+HZ-002,measure master-cylinder pressure,reports pressure higher than actual,brake ECU over-boosts and the wheels lock,cornering on a low-friction surface,S3,E3,C2,S3 loss of control at speed; E3 low-friction cornering is frequent; C2 normally controllable by an average driver,C
+HZ-003,transmit pressure over CAN,signal lost with no status indication,ECU falls back to degraded mode without informing the driver,urban driving with moderate deceleration,S2,E4,C2,S2 moderate injury in a low-speed impact; E4 urban braking is continuous; C2 driver can brake harder once aware,B
+HZ-004,transmit pressure over CAN,value delayed beyond the sample period,brake assist reacts late,emergency braking from city speed,S2,E2,C2,S2 moderate injury; E2 emergency braking is occasional; C2 controllable,A
+HZ-005,measure master-cylinder pressure,reading drifts slowly within tolerance,no vehicle-level effect within the diagnostic interval,any,S0,E4,C1,S0 no injury results from drift inside the accuracy band,

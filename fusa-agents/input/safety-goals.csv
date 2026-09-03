@@ -1,0 +1,7 @@
+# Safety goals — the engineering decisions that a goal cannot be derived without.
+# One row per hazard that carries an ASIL. `text` optional (a template is used when blank).
+hazard,safe_state,ftti,text
+HZ-001,pressure status flagged invalid on CAN and boost held at last valid value,100 ms,The BPSM shall detect an under-reading pressure fault and signal it as invalid within the FTTI.
+HZ-002,pressure status flagged invalid on CAN and boost held at last valid value,100 ms,
+HZ-003,receiving ECU detects loss of the periodic message and enters its own degraded mode,250 ms,
+HZ-004,timestamped frame rejected by the receiver,250 ms,

@@ -14,6 +14,7 @@ agents:
     conventions: [ids, document-structure]
     checklist: HARA
     item_prefixes: [HZ]
+    generator: {kind: hara, input: hazards.csv}      # --author deterministic: built from the table, no model
 
   - id: sys-sads
     work_product: SADS
@@ -26,6 +27,7 @@ agents:
     conventions: [ids, document-structure]
     checklist: SADS
     item_prefixes: [SG, AOU]
+    generator: {kind: safety-goals, from: HARA, input: safety-goals.csv, assumptions: assumptions.csv}
 
   - id: sys-tsr
     work_product: TSR
