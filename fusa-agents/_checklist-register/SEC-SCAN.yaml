@@ -1,4 +1,4 @@
 work_product: SEC-SCAN
 items:
   - {id: SEC-01, text: findings with CWE / security tags are routed to cs-tara for threat-scenario update, clause: "21434:10.4.2", check: review}
-  - {id: SEC-02, text: each finding has tool, rule, severity, location,                                 clause: "21434:11",     check: structural, rule: {kind: fields, require: [rule, severity, message]}}
+  - {id: SEC-02, text: each finding has tool, rule, severity, location,                                 clause: "21434:11",     check: structural, rule: {kind: fields, require: [rule, severity, text]}}

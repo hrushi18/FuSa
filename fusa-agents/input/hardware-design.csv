@@ -1,0 +1,7 @@
+# Hardware design specification — the element that implements each hardware safety requirement.
+id,element,part,function,implements,sm,rationale
+HWD-001,sense IC,PSX-42 piezoresistive sensor with integrated ADC,converts master-cylinder pressure to a 12-bit digital value and runs a per-conversion self test,HSR-001,SM-001,qualified part with a documented self-test in its safety manual
+HWD-002,signal processing,STM32G0 microcontroller core,filters the sample stream and applies the gradient and range checks,HSR-002,SM-002,sufficient headroom for the 1 ms sample period
+HWD-003,signal processing,STM32G0 microcontroller core,applies the 0-250 bar range clamp and sets the status word,HSR-003,SM-002,same core as the gradient check; both run in the same 1 ms task
+HWD-004,CAN transceiver,TJA1044 high-speed CAN transceiver,drives the CAN bus and carries the E2E-protected frame,HSR-004,SM-003,AEC-Q100 qualified transceiver
+HWD-005,CAN transceiver,independent 8 MHz crystal oscillator,provides the timebase for the 5 ms transmission schedule,HSR-005,SM-003,independent of the core PLL so a PLL fault cannot skew the schedule

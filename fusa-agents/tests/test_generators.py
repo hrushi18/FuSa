@@ -151,14 +151,18 @@ def test_the_generator_holds_no_model(orch):
 
 
 def test_agents_without_a_generator_still_use_the_model(orch):
-    """The modes mix: a work product with no table to render from keeps its authoring agent."""
+    """The modes mix: a work product with no table to render from keeps its authoring agent.
+
+    Every shipped agent now declares a generator, so this checks the choice itself rather than
+    the current config — adding an agent without one must not require code changes."""
     from fusa.agents.base import AuthoringAgent
+    from fusa.agents.registry import build_agents
     from fusa.generators import GeneratorAgent
-    for agent_id, agent in orch.agents.items():
-        expected = GeneratorAgent if orch.by_id[agent_id].generator else AuthoringAgent
-        if orch.by_id[agent_id].kind == "authoring":
-            assert isinstance(agent, expected), agent_id
-    assert any(isinstance(a, AuthoringAgent) for a in orch.agents.values())   # some still do
+
+    specs = [s.model_copy(update={"generator": None}) if s.id == "sys-hara" else s for s in orch.specs]
+    agents = build_agents(specs, orch.reg, orch.llm, "deterministic")
+    assert isinstance(agents["sys-hara"], AuthoringAgent)      # no table: the model writes it
+    assert isinstance(agents["sys-sads"], GeneratorAgent)      # a table: rendered from it
 
 
 def test_the_whole_path_runs_with_no_api_key(workspace, monkeypatch):

@@ -46,9 +46,36 @@ class Ctx:
         self.items = ids.parse_items(content)
 
     def scoped(self) -> list[ids.Item]:
-        """Items the rule applies to — all of them, or one id prefix (`prefix: SG`)."""
+        """Items the rule applies to: all of them, one id prefix (`prefix: SG`), or those
+        matching a `where:` filter — so a rule can say exactly what its checklist item says.
+        A SAFE failure mode has no safety mechanism by definition, and demanding one of it
+        would be the rule disagreeing with the analysis rather than checking it."""
         prefix = self.cfg.get("prefix")
-        return [i for i in self.items if not prefix or i.prefix == prefix]
+        items = [i for i in self.items if not prefix or i.prefix == prefix]
+        where = self.cfg.get("where")
+        if not where:
+            return items
+        field = where["field"]
+
+        def keep(item: ids.Item) -> bool:
+            value = (item.fields.get(field) or "").strip()
+            if "gt" in where or "lt" in where:          # a claim of 0 is no claim at all
+                try:
+                    number = float(value.rstrip("%"))
+                except ValueError:
+                    return False
+                return number > where["gt"] if "gt" in where else number < where["lt"]
+            if "is" in where:
+                return value.upper() == str(where["is"]).upper()
+            if "not" in where:
+                return value.upper() != str(where["not"]).upper()
+            if "in" in where:
+                return value.upper() in [str(v).upper() for v in where["in"]]
+            if "not_in" in where:
+                return value.upper() not in [str(v).upper() for v in where["not_in"]]
+            return bool(value) if where.get("present", True) else not value
+
+        return [i for i in items if keep(i)]
 
 
 def rule_fields(ctx: Ctx) -> list[str]:

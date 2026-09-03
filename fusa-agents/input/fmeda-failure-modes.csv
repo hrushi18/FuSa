@@ -1,10 +1,10 @@
-element,mode,lam_fit,category,dc,safety_mechanism
-PSX-42,open output,8.0,SR,0.90,SM-001
-PSX-42,drift,6.0,SR,0.99,SM-002
-PSX-42,stuck-at,4.0,SR,0.99,SM-002
-Vref,drift,2.0,MPF,0.99,SM-002
-MCU core,wrong computation,5.0,SR,0.99,SM-003
-RAM,bit flip,3.0,SR,0.99,SM-004
-CAN transceiver,short to ground,7.0,SAFE,0.0,
-Watchdog,failure to trip,1.5,MPF,0.0,
-Connector,intermittent,0.5,SR,0.0,
+element,mode,lam_fit,category,dc,safety_mechanism,source
+PSX-42,open output,8.0,SR,0.90,SM-001,PSX-42 safety manual table 7, 55 C mission profile
+PSX-42,drift,6.0,SR,0.99,SM-002,PSX-42 safety manual table 7, 55 C mission profile
+PSX-42,stuck-at,4.0,SR,0.99,SM-002,PSX-42 safety manual table 7, 55 C mission profile
+Vref,drift,2.0,MPF,0.99,SM-002,PSX-42 safety manual table 7, 55 C mission profile
+MCU core,wrong computation,5.0,SR,0.99,SM-003,IEC 62380 estimate at 55 C, 8000 h/year
+RAM,bit flip,3.0,SR,0.99,SM-004,IEC 62380 estimate at 55 C, 8000 h/year
+CAN transceiver,short to ground,7.0,SAFE,0.0,,IEC 62380 estimate at 55 C, 8000 h/year
+Watchdog,failure to trip,1.5,MPF,0.0,,IEC 62380 estimate at 55 C, 8000 h/year
+Connector,intermittent,0.5,SR,0.0,,IEC 62380 estimate at 55 C, 8000 h/year

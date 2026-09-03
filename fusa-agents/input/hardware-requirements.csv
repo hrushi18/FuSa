@@ -1,0 +1,8 @@
+# Hardware safety requirements — one row per TSC allocation that hardware must satisfy.
+# element, sm and asil come from the allocation unless stated here.
+id,allocation,element,behaviour,condition,within,verification,sm
+HSR-001,TSC-001,sense IC,run its internal self test on every conversion and drive the fault pin on failure,,10 ms,fault injection on the sense-IC fault pin,SM-001
+HSR-002,TSC-002,signal processing,compute the sample-to-sample gradient and reject samples outside the qualified band,continuous operation,10 ms,fault injection with an out-of-band gradient,SM-002
+HSR-003,TSC-003,signal processing,clamp and flag any converted value outside the 0-250 bar range,continuous operation,10 ms,boundary test at 0 and 250 bar,SM-002
+HSR-004,TSC-004,CAN transceiver,append the E2E CRC and rolling counter to every transmitted frame,,5 ms,CAN protocol conformance and corruption test,SM-003
+HSR-005,TSC-005,CAN transceiver,schedule the pressure frame every 5 ms from an independent timebase,,5 ms,timing measurement over 10000 frames,SM-003

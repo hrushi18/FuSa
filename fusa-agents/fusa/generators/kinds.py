@@ -369,8 +369,128 @@ def generate_tara(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
     return Result(rows=out, pending=pending)
 
 
+DERIVED_REQ_COLUMNS = ["allocation", "behaviour", "verification"]
+HW_DESIGN_COLUMNS = ["element", "part", "function", "implements"]
+FMEDA_ITEM_COLUMNS = ["element", "mode", "lam_fit", "category"]
+
+
+def generate_derived_requirements(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """Hardware (or software) safety requirements refining a technical safety concept item.
+
+    Same shape as the technical requirements, one level down: the parent is the TSC allocation,
+    and ASIL, element and the mechanism come from it rather than being restated here.
+    """
+    upstream = cfg.get("from", "TSC")
+    if not reg.generated.exists(upstream):
+        raise InputMissing(f"{upstream} has not been produced yet")
+    allocations = {i.id: i for i in reg.generated.items(upstream)}
+    rows = read_table(config.INPUT_DIR / cfg.get("input", "hardware-requirements.csv"), DERIVED_REQ_COLUMNS)
+
+    out, pending, refined = [], [], set()
+    for rec in rows:
+        alloc_id = rec["allocation"].strip().upper()
+        alloc = allocations.get(alloc_id)
+        if alloc is None:
+            pending.append(f"row {rec['_row']} refines {alloc_id or '(blank)'}, "
+                           f"which is not in {upstream} <- project")
+            continue
+        refined.add(alloc_id)
+        element = rec.get("element") or alloc.fields.get("element", "")
+        sentence = f"The {element} shall {rec['behaviour']}"
+        if rec.get("condition"):
+            sentence += f" under {rec['condition']}"
+        if rec.get("within"):
+            sentence += f" within {rec['within']}"
+        out.append(Row(id=rec.get("id") or None, fields={
+            "parent": alloc_id,
+            "asil": alloc.fields.get("asil", ""),
+            "element": element,
+            "sm": rec.get("sm") or alloc.fields.get("sm", ""),
+            "text": sentence.rstrip(".") + ".",
+            "verification": rec["verification"],
+            "rationale": rec.get("rationale") or f"refines {alloc_id}",
+        }))
+    for alloc_id in sorted(set(allocations) - refined):
+        pending.append(f"{alloc_id} has no {spec.work_product} row in "
+                       f"{cfg.get('input', 'hardware-requirements.csv')} <- project")
+    return Result(rows=out, pending=pending)
+
+
+def generate_hardware_design(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """The design elements, each naming the requirement it implements."""
+    upstream = cfg.get("from", "HSR")
+    if not reg.generated.exists(upstream):
+        raise InputMissing(f"{upstream} has not been produced yet")
+    reqs = {i.id: i for i in reg.generated.items(upstream)}
+    rows = read_table(config.INPUT_DIR / cfg.get("input", "hardware-design.csv"), HW_DESIGN_COLUMNS)
+
+    out, pending, implemented = [], [], set()
+    for rec in rows:
+        req_id = rec["implements"].strip().upper()
+        req = reqs.get(req_id)
+        if req is None:
+            pending.append(f"row {rec['_row']} implements {req_id or '(blank)'}, "
+                           f"which is not in {upstream} <- project")
+            continue
+        implemented.add(req_id)
+        out.append(Row(id=rec.get("id") or None, fields={
+            "parent": req_id,
+            "asil": req.fields.get("asil", ""),
+            "element": rec["element"],
+            "part": rec["part"],
+            "function": rec["function"],
+            "sm": rec.get("sm") or req.fields.get("sm", ""),
+            "text": f"{rec['element']} ({rec['part']}): {rec['function']}.",
+            "rationale": rec.get("rationale") or f"implements {req_id}",
+        }))
+    for req_id in sorted(set(reqs) - implemented):
+        pending.append(f"{req_id} is not implemented by any element in "
+                       f"{cfg.get('input', 'hardware-design.csv')} <- project")
+    return Result(rows=out, pending=pending)
+
+
+def generate_fmeda(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """One item per failure mode of the quantitative analysis, over the same CSV the metrics
+    tool reads — so the table in metrics.md and the items here can never disagree.
+
+    The ASIL targets are checked here too: a missed target becomes an item carrying
+    `returns_to`, which is the checklist's own instruction and fires the feedback loop.
+    """
+    from ..tools import metrics
+    path = config.INPUT_DIR / cfg.get("input", "fmeda-failure-modes.csv")
+    rows = read_table(path, FMEDA_ITEM_COLUMNS)
+    modes = metrics.load_csv(path)                      # the same parse the metrics tool performs
+    asil = str(cfg.get("asil", "B")).upper()
+    profile = cfg.get("mission_profile", "")
+
+    out, pending = [], []
+    if not profile:
+        pending.append("mission profile for the quoted failure rates <- project")
+    for rec, mode in zip(rows, modes):
+        fields = {k: rec[k] for k in FMEDA_ITEM_COLUMNS}
+        fields["category"] = mode.category
+        fields["dc"] = rec.get("dc", "")
+        fields["sm"] = rec.get("safety_mechanism", "")
+        fields["source"] = rec.get("source", "")
+        fields["mission_profile"] = profile
+        note = None
+        if not fields["source"]:
+            note = f"[PENDING: source for the {rec['element']} {rec['mode']} failure rate <- project]"
+        out.append(Row(id=rec.get("id") or None, fields=fields, note=note))
+
+    for why in metrics.compute(modes).check(asil):      # the same targets `fusa metrics` reports
+        out.append(Row(prefix=spec.prefixes[0], fields={
+            "element": "item", "mode": "quantitative target not met", "classification": "finding",
+            "text": why, "finding": "target_missed", "returns_to": cfg.get("returns_to", "sys-tsc"),
+        }))
+    return Result(rows=out, pending=pending)
+
+
 GENERATORS = {"hara": generate_hara, "safety-goals": generate_safety_goals,
               "safety-mechanisms": generate_safety_mechanisms,
               "technical-requirements": generate_technical_requirements,
               "safety-concept": generate_safety_concept,
-              "fmea": generate_fmea, "tara": generate_tara}
+              "fmea": generate_fmea, "tara": generate_tara,
+              "derived-requirements": generate_derived_requirements,
+              "hardware-design": generate_hardware_design,
+              "fmeda": generate_fmeda}
