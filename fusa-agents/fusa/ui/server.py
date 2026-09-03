@@ -266,9 +266,17 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
         return {"started": agent_id}
 
     @app.post("/api/run-all", status_code=202)
-    def run_all():
-        runner.start("run-all", lambda log: orch.run_all(log=log))
-        return {"started": "run-all"}
+    async def run_all(request: Request):
+        """Optionally pick how the chain runs in the same call, so a mode is never half applied:
+        `{"author": "deterministic", "reviewer": "rules"}` runs it with no model at all."""
+        raw = await request.body()
+        if raw.strip():
+            data = await request.json()
+            if data.get("author") or data.get("reviewer"):
+                orch.set_modes(author=data.get("author"), reviewer=data.get("reviewer"))
+        modes = f"{orch.author_kind} authoring · {orch.reviewer_kind} review"
+        runner.start(f"run-all ({modes})", lambda log: orch.run_all(log=log))
+        return {"started": "run-all", "author": orch.author_kind, "reviewer": orch.reviewer_kind}
 
     # ---- what a newcomer needs to see: what is ready, how content is made, how it is checked ----
 
@@ -339,6 +347,57 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
                         "status": orch.reg.process.status(spec.work_product).value,
                         "counts": counts, "items": items})
         return out
+
+    RESULT_COLUMNS = ["phase", "work_product", "agent", "written_by", "input_table", "status",
+                      "gate_passed", "gate_errors", "gate_warnings", "open_points", "review_verdict",
+                      "blocker_findings", "major_findings", "minor_findings",
+                      "checks_by_gate", "checks_by_rule", "checks_by_model", "checks_awaiting_you",
+                      "authoring_mode", "review_mode", "exported"]
+
+    def _result_rows() -> list[list]:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        rows = []
+        for w in checks():
+            rec = orch.reg.process.get(w["work_product"])
+            gate = rec.gate if rec else None
+            findings = rec.review.findings if rec and rec.review else []
+            sev = {k: sum(1 for f in findings if f.severity == k) for k in ("blocker", "major", "minor")}
+            rows.append([
+                w["phase"], w["work_product"], w["agent"], w["source"], w.get("input") or "",
+                w["status"],
+                "" if gate is None else ("yes" if gate.passed else "no"),
+                "; ".join(gate.errors) if gate else "", "; ".join(gate.warnings) if gate else "",
+                "; ".join(gate.pending) if gate else "",
+                rec.review.verdict if rec and rec.review else "",
+                sev["blocker"], sev["major"], sev["minor"],
+                w["counts"]["gate"], w["counts"]["rule"], w["counts"]["model"], w["counts"]["human"],
+                orch.author_kind, orch.reviewer_kind, now,
+            ])
+        return rows
+
+    def _csv(header: list[str], rows: list[list], name: str) -> Response:
+        buf = io.StringIO()
+        writer = csv.writer(buf, lineterminator="\n")
+        writer.writerow(header)
+        writer.writerows(rows)
+        return Response(buf.getvalue(), media_type="text/csv",
+                        headers={"content-disposition": f'attachment; filename="{name}"'})
+
+    @app.get("/results.csv")
+    def results_csv():
+        """One row per work product: what produced it, how it fared, and under which mode — so a
+        run with a model and a run without one diff against each other line for line."""
+        return _csv(RESULT_COLUMNS, _result_rows(),
+                    f"fusa-results-{orch.author_kind}-{orch.reviewer_kind}.csv")
+
+    @app.get("/checks.csv")
+    def checks_csv():
+        """One row per checklist item and what decides it — the rule/model/human split as data."""
+        rows = [[w["phase"], w["work_product"], w["agent"], i["id"], i["decided_by"], i["detail"],
+                 i["clause"] or "", i["text"]]
+                for w in checks() for i in w["items"]]
+        return _csv(["phase", "work_product", "agent", "check_id", "decided_by", "detail",
+                     "clause", "check"], rows, "fusa-checks.csv")
 
     @app.get("/api/asil-table")
     def asil_table():

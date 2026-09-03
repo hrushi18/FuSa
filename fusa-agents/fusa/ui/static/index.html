@@ -56,6 +56,19 @@
   .machine { color: var(--p-machine); } .model { color: var(--p-model); } .human { color: var(--p-human); }
   .why { font-size: 11px; color: var(--dim); line-height: 1.5; margin: 8px 0 0; }
 
+  /* the primary choice: the colour of the mode you pick is the colour the board turns */
+  .mode { border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; margin-bottom: 9px;
+          cursor: pointer; }
+  .mode:hover { border-color: currentColor; }
+  .mode.on { border-color: currentColor; background: var(--panel2); }
+  .mode .m-top { display: flex; align-items: center; gap: 8px; }
+  .mode .m-dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid currentColor; flex: none; }
+  .mode.on .m-dot { background: currentColor; }
+  .mode .m-name { color: var(--text); font-size: 12px; font-weight: 600; }
+  .mode .m-sub { color: var(--dim); font-size: 10px; line-height: 1.5; margin-top: 5px; }
+  .mode .m-need { font-size: 10px; margin-top: 5px; }
+  .mode button { width: 100%; margin-top: 9px; }
+
   /* ---- main ---- */
   header { display: flex; align-items: center; gap: 10px; padding: 12px 20px;
            border-bottom: 1px solid var(--line); background: var(--panel);
@@ -152,6 +165,19 @@
   </div>
 
   <div class="sec">
+    <h2>Run the chain</h2>
+    <p class="lede">Pick how the work products are written and reviewed, then run.</p>
+    <div id="modes"></div>
+  </div>
+
+  <div class="sec">
+    <h2>Results</h2>
+    <p class="lede">Every work product with how it fared, tagged with the mode that produced it.
+       Export a run of each and diff them.</p>
+    <div id="results"></div>
+  </div>
+
+  <div class="sec">
     <h2>Where every answer comes from</h2>
     <p class="lede">Click a mark to filter the board.</p>
     <div id="keys"></div>
@@ -192,9 +218,6 @@
   <button id="templates" title="Download a blank input table">⬇ Template</button>
   <button id="inputs">⬆ Inputs</button>
   <button id="report">Report</button>
-  <button id="reportx" title="Excel results workbook">⬇ xlsx</button>
-  <button id="aspice">ASPICE</button>
-  <button id="runall" class="primary">▶ Run all</button>
 </header>
 <div id="board"></div>
 </main>
@@ -237,13 +260,26 @@ const chip = k => `<span class="tag ${PROV[k].family}">${PROV[k].word}</span>`;
 
 async function loadPanel(){
   [ready, checks] = await Promise.all([api("/api/readiness"), api("/api/checks")]);
-  drawKeys(); drawReady(); drawSources(); drawChecks(); drawAttention();
+  drawModes(); drawResults(); drawKeys(); drawReady(); drawSources(); drawChecks(); drawAttention();
 }
 
 function totals(){
   const t = {gate:0, rule:0, human:0, model:0};
   checks.forEach(w => Object.entries(w.counts).forEach(([k,v]) => t[k]+=v));
   return t;
+}
+
+function drawResults(){
+  const done = checks.filter(w => ["reviewed","rework","gate_failed"].includes(w.status)).length;
+  $("#results").innerHTML =
+    row("off", "⬇", "Results (.csv)",
+        `${done} of ${checks.length} work products · ${ready.author}/${ready.reviewer}`, null,
+        () => window.open("/results.csv", "_blank"))
+  + row("off", "⬇", "Checks (.csv)", "every check and what decides it", null,
+        () => window.open("/checks.csv", "_blank"))
+  + row("off", "⬇", "Validation report (.xlsx)", "summary, requirements, evidence", null,
+        () => window.open("/report.xlsx", "_blank"))
+  + row("off", "▤", "ASPICE coverage", "base practices covered by these work products", null, openAspice);
 }
 
 function drawKeys(){
@@ -309,11 +345,60 @@ function drawReady(){
   $("#ready").innerHTML = out.join("");
 }
 
+const MODES = {
+  none: {author:"deterministic", reviewer:"rules", family:"machine",
+         name:"Without a model",
+         sub:"Work products are rendered from your input tables; the checklist is executed. Same input, same output, every time.",
+         run:"▶ Run without a model"},
+  llm:  {author:"model", reviewer:"model", family:"model",
+         name:"With a model",
+         sub:"A model writes each work product and reads the checklist. Faster to start from nothing, and every word needs reading.",
+         run:"▶ Run with a model"},
+};
+
+function drawModes(){
+  const current = ready.author === "deterministic" && ready.reviewer === "rules" ? "none"
+                : ready.author === "model" && ready.reviewer === "model" ? "llm" : null;
+  const blocked = !ready.dry_run && !ready.api_key_set;      // dry run needs no key even with a model
+  $("#modes").innerHTML = Object.entries(MODES).map(([k, m]) => {
+    const off = k === "llm" && blocked;
+    return `<div class="mode ${m.family} ${current===k?"on":""}" data-k="${k}" tabindex="0">
+      <div class="m-top"><span class="m-dot"></span><span class="m-name">${m.name}</span>
+        ${chip(k === "none" ? "table" : "model")}</div>
+      <div class="m-sub">${m.sub}</div>
+      ${k === "none" ? `<div class="m-need machine">No API key needed.</div>`
+        : off ? `<div class="m-need" style="color:var(--c-gate_failed)">Needs an API key — click ⚙ Model to add one.</div>`
+        : `<div class="m-need machine">${ready.dry_run ? "Dry run: stub content, no key used."
+            : `Ready — ${esc(ready.provider)} · ${esc(ready.model)}.`}</div>`}
+      <button data-run="${k}" ${off ? "disabled" : ""}>${m.run}</button></div>`;
+  }).join("")
+  + (current === null ? `<p class="why">Mixed: ${esc(ready.author)} authoring with ${esc(ready.reviewer)} review.</p>` : "");
+
+  $("#modes").querySelectorAll(".mode").forEach(el => {
+    const pick = () => setMode({...MODES[el.dataset.k], author: MODES[el.dataset.k].author,
+                                reviewer: MODES[el.dataset.k].reviewer});
+    el.onclick = e => { if (!e.target.dataset.run) pick(); };
+    el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
+  });
+  $("#modes").querySelectorAll("button[data-run]").forEach(b => {
+    b.onclick = async e => {
+      e.stopPropagation();
+      const m = MODES[b.dataset.run];
+      try {
+        const r = await api("/api/run-all", {method:"POST", headers:{"content-type":"application/json"},
+          body: JSON.stringify({author: m.author, reviewer: m.reviewer})});
+        logLine(`[ui] running the whole chain — ${r.author} authoring, ${r.reviewer} review`);
+        await loadPanel(); await refresh(); loadMeta();
+      } catch(err){ logLine("[ui] " + (err.detail || "could not start the run")); }
+    };
+  });
+}
+
 async function setMode(change){
   try { await api("/api/modes", {method:"POST", headers:{"content-type":"application/json"},
                                  body: JSON.stringify(change)});
         logLine("[ui] " + Object.entries(change).map(([k,v]) => `${k} → ${v}`).join(", "));
-        await loadPanel(); await refresh(); }
+        await loadPanel(); await refresh(); loadMeta(); }
   catch(e){ logLine("[ui] " + (e.detail || "could not switch mode")); }
 }
 
@@ -540,7 +625,6 @@ async function uploadCsv(file){
       .forEach(d => logLine("[ui] upload rejected — " + d));
   }
 }
-$("#reportx").onclick = () => window.open("/report.xlsx", "_blank");
 $("#report").onclick = async () => {
   try { const r = await api("/api/report", {method:"POST"}); logLine("[ui] validation report → " + r.markdown_path); }
   catch(e){ logLine("[ui] " + (e.detail || "report error")); }
@@ -593,9 +677,6 @@ function card(a){
 async function runAgent(id){
   try { await api("/api/run/" + id, {method:"POST"}); } catch(e){ logLine("[ui] " + (e.detail || "error")); }
 }
-$("#runall").onclick = async () => {
-  try { await api("/api/run-all", {method:"POST"}); } catch(e){ logLine("[ui] " + (e.detail || "error")); }
-};
 
 function logLine(l){
   const div = document.createElement("div");
@@ -614,6 +695,7 @@ async function poll(){
     $("#logdot").className = l.running ? "on" : "";
     $("#logstate").textContent = l.running ? "running…" : "idle";
     if (l.lines.length || wasRunning !== l.running) { await refresh(); await loadPanel(); }
+    if (wasRunning && !l.running) logLine("[ui] run finished — Results (.csv) in the left panel");
     wasRunning = l.running;
   } catch(e){ /* server restarting */ }
   setTimeout(poll, 700);
@@ -646,11 +728,12 @@ async function openWp(a){
 $("#d-close").onclick = () => $("#drawer").classList.remove("open");
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("#drawer").classList.remove("open"); });
 
-$("#aspice").onclick = async () => {
+async function openAspice(){
   const a = await api("/api/aspice");
   openDrawer("ASPICE base-practice coverage");
-  $("#d-body").innerHTML = mdTable(a.table);
-};
+  $("#d-body").innerHTML = `<p class="kv">Which ASPICE base practices the work products cover,
+    derived from <code>config/aspice-map.yaml</code> and the live status board.</p>` + mdTable(a.table);
+}
 function mdTable(md){
   const rows = md.trim().split("\n").filter(r => !/^\|[-| ]+\|$/.test(r));
   return "<table>" + rows.map((r,i) => "<tr>" + r.split("|").slice(1,-1)

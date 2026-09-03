@@ -177,3 +177,67 @@ def test_the_dashboard_page_carries_the_provenance_key(client):
     for marker in ("Where every answer comes from", "How it is checked", "Needs you",
                    "/api/readiness", "/api/checks", "/api/asil-table"):
         assert marker in html
+
+
+# ---- running with or without a model, and taking the results away -----------
+
+def test_a_run_can_choose_its_mode_in_the_same_call(client):
+    """Two named paths, not four combinations the user has to assemble."""
+    r = client.post("/api/run-all", json={"author": "deterministic", "reviewer": "rules"})
+    assert r.status_code == 202
+    assert r.json()["author"] == "deterministic" and r.json()["reviewer"] == "rules"
+    wait_idle(client)
+    assert client.get("/api/readiness").json()["needs_key"] is False
+
+
+def test_a_run_with_no_body_keeps_the_current_mode(client):
+    before = client.get("/api/meta").json()
+    assert client.post("/api/run-all").status_code == 202
+    wait_idle(client)
+    after = client.get("/api/meta").json()
+    assert (after["author"], after["reviewer"]) == (before["author"], before["reviewer"])
+
+
+def test_results_csv_carries_the_mode_that_produced_it(client):
+    import csv, io
+    client.post("/api/run-all", json={"author": "deterministic", "reviewer": "rules"})
+    wait_idle(client)
+    r = client.get("/results.csv")
+    assert r.status_code == 200
+    assert "fusa-results-deterministic-rules.csv" in r.headers["content-disposition"]
+    rows = list(csv.DictReader(io.StringIO(r.text)))
+    assert rows and all(row["authoring_mode"] == "deterministic" for row in rows)
+    assert all(row["review_mode"] == "rules" for row in rows)
+    hara = next(row for row in rows if row["work_product"] == "HARA")
+    assert hara["written_by"] == "table" and hara["input_table"] == "hazards.csv"
+    assert hara["status"] and hara["checks_by_rule"].isdigit()
+
+
+def test_the_two_modes_produce_diffable_files(client):
+    """The point of the split: run each way and the files line up for comparison."""
+    import csv, io
+    def run(author, reviewer):
+        client.post("/api/run-all", json={"author": author, "reviewer": reviewer})
+        wait_idle(client)
+        r = client.get("/results.csv")
+        return r.headers["content-disposition"], list(csv.DictReader(io.StringIO(r.text)))
+    name_a, without = run("deterministic", "rules")
+    name_b, with_model = run("model", "model")
+    assert name_a != name_b                                     # different files, not overwritten
+    assert [r["work_product"] for r in without] == [r["work_product"] for r in with_model]
+    assert {r["written_by"] for r in without} == {"table", "tool"}
+    assert "model" in {r["written_by"] for r in with_model}
+
+
+def test_checks_csv_is_the_rule_versus_model_split_as_data(client):
+    import csv, io
+    rows = list(csv.DictReader(io.StringIO(client.get("/checks.csv").text)))
+    assert rows and {"work_product", "check_id", "decided_by", "clause", "check"} <= set(rows[0])
+    assert {r["decided_by"] for r in rows} <= {"gate", "rule", "model", "human"}
+
+
+def test_the_panel_offers_both_runs_and_both_exports(client):
+    html = client.get("/").text
+    for marker in ("Run without a model", "Run with a model", "/results.csv", "/checks.csv",
+                   "Run the chain", "Results"):
+        assert marker in html
