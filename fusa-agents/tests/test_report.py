@@ -139,3 +139,55 @@ def test_cli_report_exit_code_reflects_verdict(workspace, capsys):
     out = capsys.readouterr().out
     assert "NOT_RELEASABLE" in out
     assert (workspace / "_generated" / "VALIDATION-REPORT.md").exists()
+
+
+# ---- what an assessor needs first: how much of this a model wrote ----------
+
+import pytest
+
+
+@pytest.mark.parametrize("author,reviewer,must_say,must_not_say", [
+    ("deterministic", "rules",  "No language model produced or judged", "marked MODEL"),
+    ("model",         "model",  "every verdict here, are a language model's judgement", None),
+    ("deterministic", "model",  "No work product was written by a language model", "marked MODEL"),
+    ("model",         "rules",  "checklist was executed as rules", None),
+])
+def test_the_report_states_its_basis_accurately_for_the_run(workspace, author, reviewer,
+                                                            must_say, must_not_say):
+    """Naming model-written work products when there are none is the same misdirection as
+    crediting a model that never ran."""
+    from fusa.orchestrator import Orchestrator
+    from fusa.report import validate
+    rep = validate(Orchestrator(root=workspace, dry_run=True, author=author, reviewer=reviewer))
+    assert must_say in rep.basis
+    if must_not_say:
+        assert must_not_say not in rep.basis
+    assert rep.author_mode == author and rep.reviewer_mode == reviewer
+
+
+def test_the_report_does_not_credit_a_model_that_never_ran(workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.report import render_html, render_markdown, validate
+    rep = validate(Orchestrator(root=workspace, dry_run=True,
+                                author="deterministic", reviewer="rules"))
+    assert "model: none" in render_markdown(rep)
+    assert rep.model not in render_html(rep)          # the provider is not named at all
+
+
+def test_every_evidence_row_says_what_wrote_it(workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.report import EVIDENCE_HEADER, _evidence_rows, validate
+    o = Orchestrator(root=workspace, dry_run=True, author="deterministic", reviewer="rules")
+    rep = validate(o)
+    assert EVIDENCE_HEADER[2] == "Written by"
+    kinds = {row[2] for row in _evidence_rows(rep)}
+    assert kinds and kinds <= {"TABLE", "TOOL", "MODEL"}
+    assert "MODEL" not in kinds                       # nothing in this run was written by one
+
+
+def test_the_printable_report_marks_model_written_rows(workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.report import render_html, validate
+    html = render_html(validate(Orchestrator(root=workspace, dry_run=True,
+                                             author="model", reviewer="model")))
+    assert "p-model" in html and "class='basis mixed'" in html
