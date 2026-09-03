@@ -12,6 +12,7 @@ In dry-run (or when `command` is absent) the report file is read as-is, so canne
 from __future__ import annotations
 
 import shlex
+import shutil
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -39,14 +40,32 @@ class ToolRunnerAgent:
         return self.spec.work_product
 
     # ---- execution -------------------------------------------------------
+    def executable(self) -> str:
+        """The program the command starts, e.g. `cppcheck` — checked before running so a
+        missing analyser is named as such instead of writing the shell's complaint into the
+        report file (these commands redirect stderr into it) and failing to parse that."""
+        cmd = self.cfg.get("command") or ""
+        try:
+            return (shlex.split(cmd) or [""])[0]
+        except ValueError:                 # unbalanced quotes: let the shell judge it
+            return cmd.split()[0] if cmd else ""
+
     def run(self) -> str:
         report = config.ROOT / self.cfg["report"]
         cmd = self.cfg.get("command")
+        result = None
         if cmd and not self.dry_run:
+            exe = self.executable()
+            if exe and shutil.which(exe) is None:
+                return self._render([], pending=f"{exe} is not installed or not on PATH — install it, "
+                                                f"or set `enabled: false` for {self.spec.id} "
+                                                f"<- {self.spec.id}")
             report.parent.mkdir(parents=True, exist_ok=True)
-            subprocess.run(cmd.format(report=report), shell=True, cwd=config.ROOT / self.cfg.get("cwd", "."), check=False)
+            result = subprocess.run(cmd.format(report=report), shell=True,
+                                    cwd=config.ROOT / self.cfg.get("cwd", "."), check=False)
         if not report.exists():
-            return self._render([], pending=f"report {self.cfg['report']} not produced <- {self.spec.id}")
+            failed = f" ({self.executable()} exited {result.returncode})" if result and result.returncode else ""
+            return self._render([], pending=f"report {self.cfg['report']} not produced{failed} <- {self.spec.id}")
         fmt = self.cfg.get("format", "sarif")
         if fmt not in PARSERS:
             return self._render([], pending=f"unknown report format '{fmt}' (have: {', '.join(PARSERS)}) "
@@ -54,10 +73,25 @@ class ToolRunnerAgent:
         try:
             findings = PARSERS[fmt](report)
         except ReportUnreadable as e:      # a crashed analyser must not read as a clean scan
-            return self._render([], pending=f"{e} <- {self.spec.id}")
+            return self._render([], pending=f"{e}{self._why(report, result)} <- {self.spec.id}")
         floor = SEVERITY_ORDER.get(self.cfg.get("min_severity", "info"), 0)
         findings = [f for f in findings if SEVERITY_ORDER.get(f.severity, 1) >= floor]
         return self._render(findings)
+
+    def _why(self, report: Path, result) -> str:
+        """What the unreadable report actually says. These commands send stderr to the report,
+        so its first line is usually the real explanation ('cppcheck: not found')."""
+        parts = []
+        if result is not None and result.returncode:
+            parts.append(f"{self.executable()} exited {result.returncode}")
+        try:
+            first = next((l.strip() for l in report.read_text(encoding="utf-8", errors="replace").splitlines()
+                          if l.strip()), "")
+        except OSError:
+            first = ""
+        if first:
+            parts.append(f"file begins: {first[:120]}")
+        return (" — " + "; ".join(parts)) if parts else ""
 
     def route(self, f: ToolFinding) -> str | None:
         for tag_sub, agent in (self.cfg.get("tags_to") or {}).items():

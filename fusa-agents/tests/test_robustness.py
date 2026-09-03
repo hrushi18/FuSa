@@ -180,6 +180,43 @@ def test_a_crashed_analyser_leaves_pending_not_a_clean_scan(workspace, monkeypat
     assert not ids.parse_items(content)              # and no findings were invented
 
 
+def test_missing_analyser_is_named_not_parsed_as_xml(workspace, monkeypatch):
+    """cppcheck writes XML to stderr and the command redirects stderr into the report, so an
+    uninstalled analyser leaves the shell's complaint there — which used to raise ParseError."""
+    import shutil as sh
+    from fusa.orchestrator import Orchestrator
+    from fusa.tools import ids
+
+    monkeypatch.setattr(sh, "which", lambda exe: None)          # nothing on PATH
+    orch = Orchestrator(root=workspace, dry_run=False)
+    _, agent = orch.resolve("sw-static-analysis")
+    pending = ids.find_pending(agent.run())
+    assert any("cppcheck is not installed" in p for p in pending)
+
+
+def test_unreadable_report_quotes_its_first_line(workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.tools import ids
+
+    orch = Orchestrator(root=workspace, dry_run=True)           # dry run: command not executed
+    _, agent = orch.resolve("sw-static-analysis")
+    report = workspace / agent.cfg["report"]
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text("'cppcheck' is not recognized as an internal or external command,\n")
+    pending = ids.find_pending(agent.run())
+    assert any("file begins: 'cppcheck' is not recognized" in p for p in pending)
+
+
+def test_blocked_message_names_the_agent_to_run(workspace):
+    from fusa.models import Status
+    from fusa.orchestrator import Orchestrator
+
+    orch = Orchestrator(root=workspace, dry_run=True)
+    logs: list[str] = []
+    assert orch.run("hw-design", log=logs.append) == Status.BLOCKED
+    assert any("run hw-hsr first" in line for line in logs)     # was just "HSR is not_started"
+
+
 @pytest.mark.parametrize("text,fragment", [
     ("agents:\n  - id: x\n   bad indent: y\n", "could not be read"),
     ("agents:\n  - id: x\n    title: t\n", "agent 'x' is invalid"),

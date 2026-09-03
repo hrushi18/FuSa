@@ -74,7 +74,11 @@ class Orchestrator:
             st = self.reg.process.status(up)
             if st not in READY_FOR_DOWNSTREAM:
                 if up in self.by_wp and self.by_wp[up].enabled:
-                    reasons.append(f"{up} is {st.value}")
+                    # name the agent to run next: "HSR is blocked" alone leaves the reader
+                    # to work out which of 30 agents produces HSR
+                    owner = self.by_wp[up].id
+                    reasons.append(f"{up} is {st.value} — run {owner} first"
+                                   if owner in self.agents else f"{up} is {st.value}")
                 # disabled upstream: allowed, the author will mark PENDING
             elif self.strict:
                 rec = self.reg.process.get(up)
