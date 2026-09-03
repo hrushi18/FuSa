@@ -38,6 +38,16 @@ class Orchestrator:
         self.agents = build_agents(self.specs, self.reg, self.llm, self.author_kind)
         self.review_spec = next((s for s in self.specs if s.kind == "review"), None)
 
+    def set_modes(self, author: str | None = None, reviewer: str | None = None) -> dict:
+        """Switch authoring or review without a restart. Changing the author rebuilds the agents,
+        because that choice *is* which agent object each work product gets."""
+        if reviewer in ("model", "rules"):
+            self.reviewer_kind = reviewer
+        if author in ("model", "deterministic") and author != self.author_kind:
+            self.author_kind = author
+            self.agents = build_agents(self.specs, self.reg, self.llm, self.author_kind)
+        return {"author": self.author_kind, "reviewer": self.reviewer_kind}
+
     # ---- planning ----------------------------------------------------------
     def plan(self) -> list[AgentSpec]:
         producing = [s for s in self.specs if s.kind in ("authoring", "runner") and s.enabled]

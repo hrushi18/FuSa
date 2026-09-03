@@ -33,7 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "ui":
         from .ui import server
         print(f"FuSa dashboard on http://{a.host}:{a.port}  (dry_run={a.dry_run or None})")
-        server.serve(host=a.host, port=a.port, dry_run=a.dry_run or None)
+        server.serve(host=a.host, port=a.port, dry_run=a.dry_run or None,
+                     author=a.author, reviewer=a.reviewer)
         return 0
 
     if a.cmd == "template":

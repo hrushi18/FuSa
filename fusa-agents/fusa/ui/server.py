@@ -28,6 +28,8 @@ from __future__ import annotations
 import csv
 import io
 import threading
+
+import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -97,8 +99,9 @@ class Runner:
         threading.Thread(target=work, daemon=True).start()
 
 
-def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI:
-    orch = Orchestrator(root=root, dry_run=dry_run)
+def create_app(root: Path | None = None, dry_run: bool | None = None,
+               author: str | None = None, reviewer: str | None = None) -> FastAPI:
+    orch = Orchestrator(root=root, dry_run=dry_run, author=author, reviewer=reviewer)
     runner = Runner()
     app = FastAPI(title="FuSa Agent Framework")
     app.state.orchestrator = orch
@@ -267,6 +270,108 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
         runner.start("run-all", lambda log: orch.run_all(log=log))
         return {"started": "run-all"}
 
+    # ---- what a newcomer needs to see: what is ready, how content is made, how it is checked ----
+
+    @app.get("/api/readiness")
+    def readiness():
+        """Everything the project needs from the user, and whether it has it yet."""
+        import shutil as sh
+        from ..generators.kinds import ASIL_TABLE_FILE, load_asil_table
+        table = load_asil_table(orch.reg)
+        total = len(yaml.safe_load((orch.reg.reference.path / ASIL_TABLE_FILE).read_text(encoding="utf-8"))
+                    .get("table", {})) if (orch.reg.reference.path / ASIL_TABLE_FILE).exists() else 0
+        tools = []
+        for spec in orch.specs:
+            if spec.kind == "runner" and spec.enabled and spec.runner:
+                exe = (spec.runner.get("command") or "").split(" ")[0]
+                tools.append({"agent": spec.id, "tool": exe, "installed": bool(exe and sh.which(exe)),
+                              "work_product": spec.work_product})
+        sources = {"table": 0, "tool": 0, "model": 0}
+        for spec in orch.plan():
+            if spec.kind == "runner":
+                sources["tool"] += 1
+            elif spec.generator and orch.author_kind == "deterministic":
+                sources["table"] += 1
+            else:
+                sources["model"] += 1
+        return {
+            "author": orch.author_kind, "reviewer": orch.reviewer_kind, "dry_run": orch.llm.dry_run,
+            "provider": orch.llm.provider, "model": orch.llm.model,
+            "api_key_set": bool(orch.llm.resolved_key()),
+            "needs_key": orch.author_kind != "deterministic" or orch.reviewer_kind != "rules",
+            "asil_table": {"filled": len(table), "total": total, "file": ASIL_TABLE_FILE},
+            "tools": tools, "sources": sources,
+        }
+
+    @app.post("/api/modes")
+    async def modes(request: Request):
+        """Switch how work products are written and reviewed, without restarting."""
+        if runner.busy:
+            raise HTTPException(status_code=409, detail="a run is in progress — switch when it finishes")
+        data = await request.json()
+        return orch.set_modes(author=data.get("author"), reviewer=data.get("reviewer"))
+
+    @app.get("/api/checks")
+    def checks(work_product: str | None = None):
+        """Every checklist item, and what decides it — the gate, a rule, a person, or a model."""
+        out = []
+        for spec in orch.plan():
+            if work_product and spec.work_product != work_product:
+                continue
+            items = []
+            for entry in orch.reg.checklists.items(spec.checklist or spec.work_product):
+                if entry.get("check") == "structural":
+                    decided, detail = "gate", "structural check on every commit"
+                elif entry.get("rule"):
+                    decided, detail = "rule", entry["rule"].get("kind", "")
+                elif orch.reviewer_kind == "model":
+                    decided, detail = "model", f"{orch.llm.provider} · {orch.llm.model}"
+                else:
+                    decided, detail = "human", "confirmation review (ISO 26262-8 §9)"
+                items.append({"id": entry.get("id"), "text": entry.get("text"),
+                              "clause": entry.get("clause"), "decided_by": decided, "detail": detail})
+            counts = {k: sum(1 for i in items if i["decided_by"] == k) for k in ("gate", "rule", "human", "model")}
+            out.append({"work_product": spec.work_product, "agent": spec.id, "phase": spec.phase,
+                        "source": ("tool" if spec.kind == "runner" else
+                                   "table" if spec.generator and orch.author_kind == "deterministic" else "model"),
+                        "generator": (spec.generator or {}).get("kind"),
+                        "input": (spec.generator or {}).get("input"),
+                        "status": orch.reg.process.status(spec.work_product).value,
+                        "counts": counts, "items": items})
+        return out
+
+    @app.get("/api/asil-table")
+    def asil_table():
+        from ..generators.kinds import ASIL_TABLE_FILE
+        path = orch.reg.reference.path / ASIL_TABLE_FILE
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {"table": {}}
+        return {"file": ASIL_TABLE_FILE, "values": data.get("table", {}),
+                "allowed": ["QM", "A", "B", "C", "D"]}
+
+    @app.post("/api/asil-table")
+    async def asil_table_save(request: Request):
+        """Save the determination table the engineer transcribed from their licensed standard.
+
+        Deliberately no 'fill with AI' path: a model reproducing a normative table is copying
+        content it has not licensed, and a hallucinated ASIL is wrong all the way down the chain
+        with nothing downstream able to notice."""
+        from ..generators.kinds import ASIL_TABLE_FILE
+        values = (await request.json()).get("values", {})
+        path = orch.reg.reference.path / ASIL_TABLE_FILE
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {"table": {}}
+        bad = [f"{k}={v}" for k, v in values.items()
+               if str(v).strip() and str(v).strip().upper() not in ("QM", "A", "B", "C", "D")]
+        if bad:
+            raise HTTPException(status_code=400, detail=[f"not an ASIL: {', '.join(bad)}"])
+        unknown = [k for k in values if k not in data.get("table", {})]
+        if unknown:
+            raise HTTPException(status_code=400, detail=[f"not an S×E×C key: {', '.join(sorted(unknown))}"])
+        data["table"].update({k: str(v).strip().upper() for k, v in values.items()})
+        header = path.read_text(encoding="utf-8").split("table:")[0] if path.exists() else ""
+        path.write_text(header + "table:\n" + "".join(
+            f'  {k}: "{v}"\n' for k, v in data["table"].items()), encoding="utf-8")
+        return {"saved": str(path), "filled": sum(1 for v in data["table"].values() if str(v).strip())}
+
     @app.get("/")
     def index():
         return FileResponse(STATIC / "index.html")
@@ -274,6 +379,8 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
     return app
 
 
-def serve(host: str = "127.0.0.1", port: int = 8000, dry_run: bool | None = None) -> None:
+def serve(host: str = "127.0.0.1", port: int = 8000, dry_run: bool | None = None,
+          author: str | None = None, reviewer: str | None = None) -> None:
     import uvicorn
-    uvicorn.run(create_app(dry_run=dry_run), host=host, port=port, log_level="warning")
+    uvicorn.run(create_app(dry_run=dry_run, author=author, reviewer=reviewer),
+                host=host, port=port, log_level="warning")
