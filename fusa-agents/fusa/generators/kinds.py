@@ -130,4 +130,125 @@ def _optional_table(name: str, required: list[str]) -> list[dict]:
         return []
 
 
-GENERATORS = {"hara": generate_hara, "safety-goals": generate_safety_goals}
+SM_COLUMNS = ["detects", "reaction", "dc_claim", "allocated_to", "source"]
+TSR_COLUMNS = ["safety_goal", "element", "behaviour", "verification"]
+ALLOCATION_COLUMNS = ["requirement", "element", "sm", "fdt", "frt"]
+
+
+def generate_safety_mechanisms(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """The mechanism catalogue: defined once here, referenced by id everywhere else."""
+    rows = read_table(config.INPUT_DIR / cfg.get("input", "safety-mechanisms.csv"), SM_COLUMNS)
+    out = []
+    for rec in rows:
+        fields = {k: rec[k] for k in SM_COLUMNS}
+        fields["text"] = rec.get("text", "")
+        out.append(Row(id=rec.get("id") or None, fields=fields))
+    return Result(rows=out)
+
+
+def generate_technical_requirements(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """One TSR per row, traced to the safety goal it refines.
+
+    The requirement sentence is assembled from the method's own pattern —
+    `<element> shall <behaviour> [under <condition>] [within <time>]` — so the wording is the
+    engineer's, not a paraphrase. ASIL and safe state are inherited from the parent goal, which
+    is what makes the trace exact; a goal with no row here is reported rather than left silent.
+    """
+    upstream = cfg.get("from", "SADS")
+    if not reg.generated.exists(upstream):
+        raise InputMissing(f"{upstream} has not been produced yet")
+    goals = {i.id: i for i in reg.generated.items(upstream) if i.prefix == cfg.get("goal_prefix", "SG")}
+    rows = read_table(config.INPUT_DIR / cfg.get("input", "technical-requirements.csv"), TSR_COLUMNS)
+
+    out, pending, refined = [], [], set()
+    for rec in rows:
+        sg_id = rec["safety_goal"].strip().upper()
+        goal = goals.get(sg_id)
+        if goal is None:
+            pending.append(f"row {rec['_row']} refines {sg_id or '(blank)'}, which is not in {upstream} <- project")
+            continue
+        refined.add(sg_id)
+        sentence = f"The {rec['element']} shall {rec['behaviour']}"
+        if rec.get("condition"):
+            sentence += f" under {rec['condition']}"
+        if rec.get("within"):
+            sentence += f" within {rec['within']}"
+        out.append(Row(id=rec.get("id") or None, fields={
+            "parent": sg_id,
+            "asil": (goal.fields.get("asil") or "").upper(),          # inherited, never restated
+            "element": rec["element"],
+            "text": sentence.rstrip(".") + ".",
+            "safe_state": goal.fields.get("safe_state", ""),
+            "sm": rec.get("sm", ""),
+            "verification": rec["verification"],
+            "rationale": rec.get("rationale") or f"refines {sg_id} ({goal.fields.get('ftti', 'FTTI unstated')})",
+        }))
+    for sg_id in sorted(set(goals) - refined):
+        pending.append(f"{sg_id} has no technical requirement in "
+                       f"{cfg.get('input', 'technical-requirements.csv')} <- project")
+    return Result(rows=out, pending=pending)
+
+
+def generate_safety_concept(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """Allocation of each requirement to an element and its mechanisms, with the time budget.
+
+    FTTI is not restated here: it is read through the requirement's parent safety goal, so the
+    budget check compares the allocation against the goal that set it.
+    """
+    upstream = cfg.get("from", "TSR")
+    if not reg.generated.exists(upstream):
+        raise InputMissing(f"{upstream} has not been produced yet")
+    reqs = {i.id: i for i in reg.generated.items(upstream)}
+    goals = {i.id: i for wp in ("SADS",) if reg.generated.exists(wp) for i in reg.generated.items(wp)}
+    rows = read_table(config.INPUT_DIR / cfg.get("input", "allocation.csv"), ALLOCATION_COLUMNS)
+
+    out, pending, allocated = [], [], set()
+    for rec in rows:
+        tsr_id = rec["requirement"].strip().upper()
+        req = reqs.get(tsr_id)
+        if req is None:
+            pending.append(f"row {rec['_row']} allocates {tsr_id or '(blank)'}, "
+                           f"which is not in {upstream} <- project")
+            continue
+        allocated.add(tsr_id)
+        parent_goal = goals.get(next(iter(req.refs("parent")), ""))
+        ftti = (parent_goal.fields.get("ftti", "") if parent_goal else "")
+        out.append(Row(id=rec.get("id") or None, fields={
+            "parent": tsr_id,
+            "asil": req.fields.get("asil", ""),
+            "element": rec["element"],
+            "sm": rec["sm"],
+            "fdt": rec["fdt"],
+            "frt": rec["frt"],
+            "ftti": ftti,
+            "text": f"{req.fields.get('element', rec['element'])}: {rec['sm']} detects the fault in "
+                    f"{rec['fdt']} and the item reaches the safe state in {rec['frt']}.",
+        }, note=None if ftti else f"[PENDING: ftti for {tsr_id} — its parent goal states none <- sys-sads]"))
+    for tsr_id in sorted(set(reqs) - allocated):
+        pending.append(f"{tsr_id} is not allocated in {cfg.get('input', 'allocation.csv')} <- project")
+    return Result(rows=out, pending=pending, intro=_concept_intro(spec, out))
+
+
+def _concept_intro(spec: AgentSpec, rows: list[Row]) -> str:
+    """The architecture view the checklist asks for, drawn from the allocation itself."""
+    by_element: dict[str, list[str]] = {}
+    for r in rows:
+        for sm in r.fields["sm"].replace(";", ",").split(","):
+            if sm.strip():
+                by_element.setdefault(r.fields["element"], []).append(sm.strip())
+    lines = ["Generated deterministically from the allocation table; the diagram below is drawn "
+             "from the same rows, so it cannot drift from them.\n",
+             "```mermaid", "flowchart LR"]
+    for n, (element, sms) in enumerate(sorted(by_element.items())):
+        label = ", ".join(dict.fromkeys(sms))
+        lines.append(f'  E{n}["{element}"] -->|{label}| SAFE["safe state"]')
+    if not by_element:
+        lines.append('  NONE["no allocation rows"] --> SAFE["safe state"]')
+    lines.append("```\n")
+    return "\n".join(lines)
+
+
+GENERATORS = {"hara": generate_hara, "safety-goals": generate_safety_goals,
+              "safety-mechanisms": generate_safety_mechanisms,
+              "technical-requirements": generate_technical_requirements,
+              "safety-concept": generate_safety_concept}

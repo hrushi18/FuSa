@@ -1,0 +1,9 @@
+# Technical safety requirements — one row per requirement.
+# The sentence is assembled from the method's pattern: <element> shall <behaviour>
+# [under <condition>] [within <within>]. ASIL and safe state are inherited from safety_goal.
+id,safety_goal,element,behaviour,condition,within,sm,verification,rationale
+TSR-001,SG-001,sense IC,execute its built-in self test every conversion cycle and flag the pressure status invalid on failure,,10 ms,SM-001,fault injection test on the sense-IC interface,
+TSR-002,SG-001,signal processing,reject a pressure sample whose rate of change exceeds the qualified gradient,continuous operation,10 ms,SM-002,fault injection test with an injected gradient,
+TSR-003,SG-002,signal processing,flag the pressure status invalid when the measured value exceeds the qualified range,continuous operation,10 ms,SM-002,fault injection test at the range limits,
+TSR-004,SG-003,CAN transceiver,transmit a CRC and a rolling counter with every pressure frame,,5 ms,SM-003,CAN bus fault injection and E2E protocol test,
+TSR-005,SG-004,CAN transceiver,transmit the pressure frame every 5 ms so the receiver can detect a timeout,,5 ms,SM-003,timing measurement on the CAN bus,

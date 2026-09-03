@@ -1,0 +1,8 @@
+# Safety mechanism catalogue — defined once here, referenced by SM id everywhere else.
+# dc_claim: diagnostic coverage with its justification. source: where the claim comes from
+# (a supplier safety manual section, an analysis, or a measurement).
+id,detects,reaction,dc_claim,source,allocated_to,text
+SM-001,sense-IC internal self-test failure (stuck-at, open, short),set pressure status to invalid on CAN within 5 ms,99% for stuck-at and open faults,PSX-42 safety manual section 4.2,sense IC,Sense-IC built-in self test executed every conversion cycle.
+SM-002,implausible pressure gradient against the previous samples,set pressure status to invalid on CAN within 5 ms,90% for drift and slow deviation,internal plausibility analysis PA-07,signal processing,Rate-of-change plausibility check over a 10 ms window.
+SM-003,corrupted or lost CAN frame,receiver discards the frame and counts a timeout,99% for single-bit and burst corruption,CAN CRC and sequence counter per AUTOSAR E2E profile 1A,CAN transceiver,End-to-end protection: CRC plus rolling counter on every frame.
+SM-004,supply voltage outside the qualified 4.5-5.5 V band,inhibit conversion and flag status invalid,95% for out-of-range supply,PSX-42 safety manual section 4.5,supply monitor,Supply voltage monitor with independent reference.

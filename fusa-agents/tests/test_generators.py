@@ -151,8 +151,10 @@ def test_the_generator_holds_no_model(orch):
 
 
 def test_agents_without_a_generator_still_use_the_model(orch):
+    """The modes mix: a work product with no table to render from keeps its authoring agent."""
     from fusa.agents.base import AuthoringAgent
-    assert isinstance(orch.resolve("sys-tsr")[1], AuthoringAgent)
+    assert orch.by_id["cs-tara"].generator is None
+    assert isinstance(orch.resolve("cs-tara")[1], AuthoringAgent)
 
 
 def test_the_whole_path_runs_with_no_api_key(workspace, monkeypatch):

@@ -1,0 +1,8 @@
+# Technical safety concept — allocation of each requirement to an element and its mechanisms.
+# ftti is NOT stated here: it is read through the requirement's parent safety goal.
+id,requirement,element,sm,fdt,frt
+TSC-001,TSR-001,sense IC,SM-001,10 ms,5 ms
+TSC-002,TSR-002,signal processing,SM-002,10 ms,5 ms
+TSC-003,TSR-003,signal processing,SM-002,10 ms,5 ms
+TSC-004,TSR-004,CAN transceiver,SM-003,5 ms,5 ms
+TSC-005,TSR-005,CAN transceiver,SM-003,5 ms,5 ms

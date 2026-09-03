@@ -39,6 +39,7 @@ agents:
     method: requirements-authoring
     conventions: [ids, document-structure]
     checklist: TSR
+    generator: {kind: technical-requirements, from: SADS, input: technical-requirements.csv}
 
   - id: sm-catalog
     work_product: SM-CATALOG
@@ -51,6 +52,7 @@ agents:
     conventions: [ids, document-structure]
     checklist: SM-CATALOG
     item_prefixes: [SM]
+    generator: {kind: safety-mechanisms, input: safety-mechanisms.csv}
 
   - id: sys-tsc
     work_product: TSC
@@ -60,6 +62,7 @@ agents:
     covers: [TSR]                     # every TSR is allocated in the TSC
     clauses: ["26262-4:6"]
     method: safety-concept
+    generator: {kind: safety-concept, from: TSR, input: allocation.csv}
     conventions: [ids, document-structure, diagram-rules]
     checklist: TSC
 
