@@ -486,6 +486,159 @@ def generate_fmeda(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
     return Result(rows=out, pending=pending)
 
 
+TREATED = ("avoid", "reduce", "share")
+
+
+def generate_cybersecurity_goals(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """One cybersecurity goal per treated threat scenario (ISO/SAE 21434 clause 15.10).
+
+    Nothing new is decided here: which scenarios are treated, and how, was decided in the TARA.
+    This states the goal that treatment implies and traces it back, closing the PENDING the
+    TARA raises.
+    """
+    upstream = cfg.get("from", "TARA")
+    if not reg.generated.exists(upstream):
+        raise InputMissing(f"{upstream} has not been produced yet")
+    items = {i.id: i for i in reg.generated.items(upstream)}
+    threats = [i for i in items.values() if i.prefix == "TS"]
+
+    out, pending = [], []
+    for ts in threats:
+        if (ts.fields.get("treatment") or "").lower() not in TREATED:
+            continue                                   # a retained risk carries no goal
+        asset = items.get(next(iter(ts.refs("parent")), ""))
+        prop = asset.fields.get("property", "the affected property") if asset else "the affected property"
+        name = (asset.fields.get("text") or asset.id) if asset else "the asset"
+        out.append(Row(id=None, fields={
+            "parent": ts.id,
+            "risk": ts.fields.get("risk", ""),
+            "treatment": ts.fields.get("treatment", ""),
+            "asset": asset.id if asset else "",
+            "safety_goal": ts.fields.get("safety_goal", ""),
+            "text": f"The item shall protect the {prop} of {name.rstrip('.')} against "
+                    f"{ts.fields.get('attack_path', 'the threat scenario')}.",
+            "rationale": f"treatment '{ts.fields.get('treatment', '')}' of {ts.id} "
+                         f"(risk {ts.fields.get('risk', '?')})",
+        }))
+    if not threats:
+        pending.append(f"no threat scenarios in {upstream} <- cs-tara")
+    return Result(rows=out, pending=pending)
+
+
+def generate_closure(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """Analysis findings carried back into the concept (26262-9:8.4.9).
+
+    Reads what the analyses already flagged — uncovered failure modes, missed quantitative
+    targets — and records one closure item per finding, still pointing at the design owner.
+    A closure work product with nothing in it is the honest outcome when nothing was flagged.
+    """
+    out, pending = [], []
+    for wp in cfg.get("from", ["SYS-FMEA", "HW-FMEDA"]):
+        if not reg.generated.exists(wp):
+            pending.append(f"{wp} has not been produced yet <- project")
+            continue
+        for item in reg.generated.items(wp):
+            finding = item.fields.get("finding")
+            if not finding:
+                continue
+            out.append(Row(id=None, fields={
+                "parent": item.id,
+                "source": wp,
+                "finding": finding,
+                "element": item.fields.get("element", ""),
+                "violated_sg": item.fields.get("violated_sg", ""),
+                "text": item.fields.get("text") or
+                        f"{item.fields.get('failure_mode', finding)} on {item.fields.get('element', 'the item')} "
+                        f"is {finding} and needs a concept change.",
+                "returns_to": item.fields.get("returns_to", cfg.get("returns_to", "sys-tsc")),
+                "status": "open",
+            }))
+    return Result(rows=out, pending=pending,
+                  intro="Every finding the analyses raised, carried back to the concept that owns it. "
+                        "Derived from the analyses themselves, so it cannot omit one.\n"
+                  if out else "The analyses raised no findings to carry back.\n")
+
+
+def generate_test_spec(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """One test case per requirement, from the verification method the requirement already names."""
+    out, pending = [], []
+    for wp in cfg.get("from", ["TSR", "HSR"]):
+        if not reg.generated.exists(wp):
+            pending.append(f"{wp} has not been produced yet <- project")
+            continue
+        for req in reg.generated.items(wp):
+            method = req.fields.get("verification", "")
+            if not method:
+                pending.append(f"{req.id} ({wp}) names no verification method <- project")
+                continue
+            out.append(Row(id=None, fields={
+                "parent": req.id,
+                "asil": req.fields.get("asil", ""),
+                "element": req.fields.get("element", ""),
+                "method": method,
+                "sm": req.fields.get("sm", ""),
+                "text": f"Verify that {req.fields.get('text', req.id).rstrip('.')} — by {method}.",
+                "status": "specified",
+            }))
+    return Result(rows=out, pending=pending)
+
+
+TRACE_CHAIN = ["SADS", "TSR", "TSC", "HSR", "HW-DESIGN", "TEST-SPEC"]
+
+
+def generate_traceability(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
+    """The traceability matrix, derived from the identifiers rather than maintained by hand.
+
+    One item per safety goal carrying its chain down the V, and the chain is walked over
+    `parent:` links, so a break in it shows up as an empty level rather than as a claim.
+    """
+    chain = cfg.get("chain", TRACE_CHAIN)
+    present = [wp for wp in chain if reg.generated.exists(wp)]
+    children: dict[str, list] = {}
+    for wp in present:
+        for item in reg.generated.items(wp):
+            for parent in item.refs("parent"):
+                children.setdefault(parent, []).append((wp, item.id))
+
+    root = cfg.get("root", "SADS")
+    if root not in present:
+        raise InputMissing(f"{root} has not been produced yet")
+    goals = [i for i in reg.generated.items(root) if i.prefix == cfg.get("root_prefix", "SG")]
+
+    out, pending, rows = [], [], []
+    for goal in goals:
+        levels: dict[str, list[str]] = {}
+        frontier = [goal.id]
+        while frontier:
+            nxt = []
+            for node in frontier:
+                for wp, child in children.get(node, []):
+                    levels.setdefault(wp, []).append(child)
+                    nxt.append(child)
+            frontier = nxt
+        broken = [wp for wp in chain[1:] if wp in present and not levels.get(wp)]
+        out.append(Row(id=None, fields={
+            "parent": goal.id,
+            "asil": goal.fields.get("asil", ""),
+            **{wp.lower().replace("-", "_"): ", ".join(dict.fromkeys(levels.get(wp, []))) for wp in chain[1:]},
+            "complete": "no" if broken else "yes",
+            "text": f"Trace for {goal.id}: " + " → ".join(
+                f"{wp} ({len(dict.fromkeys(levels.get(wp, [])))})" for wp in chain[1:] if wp in present),
+        }, note=f"[PENDING: {goal.id} has no {', '.join(broken)} item <- project]" if broken else None))
+        rows.append((goal.id, goal.fields.get("asil", ""), levels, broken))
+
+    header = "| Safety goal | ASIL | " + " | ".join(wp for wp in chain[1:] if wp in present) + " | complete |"
+    sep = "|---" * (len([wp for wp in chain[1:] if wp in present]) + 3) + "|"
+    table = [header, sep] + [
+        f"| {gid} | {asil} | " + " | ".join(
+            ", ".join(dict.fromkeys(lv.get(wp, []))) or "—" for wp in chain[1:] if wp in present)
+        + f" | {'no' if br else 'yes'} |" for gid, asil, lv, br in rows]
+    return Result(rows=out, pending=pending,
+                  intro="Derived from the `parent:` links in the work products themselves, never "
+                        "maintained by hand — a break in the chain shows as an empty cell.\n\n"
+                        + "\n".join(table) + "\n")
+
+
 GENERATORS = {"hara": generate_hara, "safety-goals": generate_safety_goals,
               "safety-mechanisms": generate_safety_mechanisms,
               "technical-requirements": generate_technical_requirements,
@@ -493,4 +646,8 @@ GENERATORS = {"hara": generate_hara, "safety-goals": generate_safety_goals,
               "fmea": generate_fmea, "tara": generate_tara,
               "derived-requirements": generate_derived_requirements,
               "hardware-design": generate_hardware_design,
-              "fmeda": generate_fmeda}
+              "fmeda": generate_fmeda,
+              "cybersecurity-goals": generate_cybersecurity_goals,
+              "closure": generate_closure,
+              "test-spec": generate_test_spec,
+              "traceability": generate_traceability}

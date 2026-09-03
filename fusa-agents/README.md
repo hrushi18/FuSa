@@ -84,7 +84,8 @@ are also settable live in the dashboard (**⚙ LLM**), or once in a gitignored `
 |---|---|---|---|
 | Authoring agent | `authoring` | model + method + clauses + upstream WPs | SADS, TSR, TSC, SM-CATALOG, FMEA, FMEDA, **TARA** (ISO 21434) |
 | Tool-runner agent | `runner` | executing an external tool and parsing its report | **sw-static-analysis** (cppcheck/MISRA XML), **sec-scan** (SARIF) |
-| Generator | `generator:` block | rendering engineer-authored tables, no model (`--author deterministic`) | all ten enabled authoring agents: HARA, SADS, TSR, SM-CATALOG, TSC, HSR, HW-DESIGN, HW-FMEDA, SYS-FMEA, TARA |
+| Generator | `generator:` block | rendering engineer-authored tables, no model (`--author deterministic`) | HARA, SADS, TSR, SM-CATALOG, TSC, HSR, HW-DESIGN, HW-FMEDA, SYS-FMEA, TARA |
+| Derivation | `generator:` block, no input table | reading what upstream work products already imply | **CSG** (goals for treated threats), **TSC-CLOSURE** (analysis findings back to the concept), **TEST-SPEC** (a case per requirement's own verification method), **TRACEABILITY** (the matrix, walked over `parent:` links) |
 | Adapter (boundary) | — (CLI) | importing/exporting a tool format | **ReqIF** in/out (`SYS-REQ`), codebeamer stub |
 
 All four go through the same gate, the same independent reviewer and the same status board. A second
@@ -93,6 +94,12 @@ Tool findings carry `- returns_to: <agent>` (by severity or by tag, e.g. `CWE` �
 owning upstream work product into `rework` — the same feedback loop reviewers use.
 
 `config/aspice-map.yaml` maps work products to ASPICE base practices; `fusa aspice` reports coverage.
+
+`fusa --author deterministic --reviewer rules run-all` produces all sixteen enabled work products with
+no API key. In the shipped sample data one is legitimately unfinished: the supply monitor's slow droop
+(`SFM-007`) has no safety mechanism, so the FMEA flags it `uncovered`, the feedback loop returns TSC to
+`rework`, and the three phase-7 products that depend on the concept wait rather than certify one under
+rework. Cover that failure mode in `input/safety-mechanisms.csv` and the chain completes.
 
 Still out of scope (by design, for now): executing tests on target / platform performance measurement, HLD/LLD agents
 beyond the declared rows, and a real codebeamer transport. The seams for each exist (`kind: runner`, `agents.yaml`,
