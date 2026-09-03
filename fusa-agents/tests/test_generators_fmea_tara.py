@@ -29,12 +29,29 @@ def test_every_row_carries_what_the_checklist_demands(chain):
                                          "local_effect", "item_effect", "classification"))
 
 
-def test_a_mode_with_no_mechanism_is_flagged_uncovered_and_returned(chain):
-    """A blank `sm` cell against a violated goal is what makes it uncovered — not a judgement."""
-    uncovered = [r for r in items(chain, "sys-fmea") if r.fields.get("finding") == "uncovered"]
-    assert [r.id for r in uncovered] == ["SFM-007"]
+UNCOVERED_ROW = ("element,function,failure_mode,local_effect,item_effect,classification,violated_sg,sm\n"
+                 "sense IC,convert pressure,stuck-at,frozen,pressure constant,SR,SG-001,SM-001\n"
+                 "supply monitor,hold supply,slow droop,reference drifts,readings biased,SR,SG-001,\n")
+
+
+def test_a_mode_with_no_mechanism_is_flagged_uncovered_and_returned(chain, workspace):
+    """A blank `sm` cell against a violated goal is what makes it uncovered — not a judgement.
+    The gap is written here rather than borrowed from the sample, which is now complete."""
+    (workspace / "input" / "failure-modes.csv").write_text(UNCOVERED_ROW)
+    rows = items(chain, "sys-fmea")
+    uncovered = [r for r in rows if r.fields.get("finding") == "uncovered"]
+    assert len(uncovered) == 1 and uncovered[0].fields["element"] == "supply monitor"
     assert uncovered[0].fields["returns_to"] == "sys-tsc"
     assert uncovered[0].fields["violated_sg"] == "SG-001" and not uncovered[0].fields.get("sm")
+    assert all("finding" not in r.fields for r in rows if r.fields.get("sm"))
+
+
+def test_the_shipped_sample_has_every_mode_covered(chain):
+    """And the sample itself now closes that loop: SFM-007 is answered by SM-005."""
+    rows = items(chain, "sys-fmea")
+    assert not [r for r in rows if r.fields.get("finding") == "uncovered"]
+    droop = next(r for r in rows if r.fields["failure_mode"] == "undetected slow supply droop")
+    assert droop.fields["sm"] == "SM-005"
 
 
 def test_a_covered_mode_carries_no_finding(chain):
@@ -47,13 +64,23 @@ def test_a_safe_mode_violating_no_goal_is_not_uncovered(chain):
     assert safe and all("finding" not in r.fields for r in safe)
 
 
-def test_the_uncovered_mode_sends_the_concept_back(chain):
+def test_an_uncovered_mode_sends_the_concept_back(chain, workspace):
     """The framework's feedback loop, fired by a blank cell rather than by a model's opinion."""
     from fusa.models import Status
+    (workspace / "input" / "failure-modes.csv").write_text(UNCOVERED_ROW)
     for wp, agent in (("TSC", "sys-tsc"), ("SM-CATALOG", "sm-catalog")):     # sys-fmea's upstream
         chain.reg.process.update(wp, agent, status=Status.REVIEWED)
     chain.run("sys-fmea", log=lambda *a: None)
     assert chain.reg.process.status("TSC") is Status.REWORK
+
+
+def test_a_covered_analysis_leaves_the_concept_alone(chain):
+    """And the shipped sample, now complete, does not send it back."""
+    from fusa.models import Status
+    for wp, agent in (("TSC", "sys-tsc"), ("SM-CATALOG", "sm-catalog")):
+        chain.reg.process.update(wp, agent, status=Status.REVIEWED)
+    chain.run("sys-fmea", log=lambda *a: None)
+    assert chain.reg.process.status("TSC") is Status.REVIEWED
 
 
 def test_an_element_allocated_in_the_concept_but_never_analysed_is_reported(chain, workspace):
@@ -162,4 +189,4 @@ def test_seven_work_products_reach_reviewed_with_no_api_key(workspace, monkeypat
     o = Orchestrator(root=workspace, dry_run=False, author="deterministic", reviewer="rules")
     for agent_id in (*UPSTREAM, "cs-tara", "sys-fmea"):
         assert o.run(agent_id, log=lambda *a: None) is Status.REVIEWED, agent_id
-    assert o.reg.process.status("TSC") is Status.REWORK      # the uncovered mode sent it back
+    assert o.reg.process.status("TSC") is Status.REVIEWED    # nothing uncovered to send it back

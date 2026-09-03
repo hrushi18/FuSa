@@ -62,7 +62,7 @@ def test_a_requirement_pointing_at_a_goal_that_does_not_exist_is_reported(worksp
 
 def test_the_catalogue_carries_what_the_checklist_demands(chain):
     sms = items(chain, "sm-catalog")
-    assert len(sms) == 4 and sms[0].id == "SM-001"
+    assert len(sms) == 5 and sms[0].id == "SM-001"      # SM-005 covers the supply droop
     for sm in sms:
         assert all(sm.fields[k] for k in ("detects", "reaction", "dc_claim", "allocated_to", "source"))
 

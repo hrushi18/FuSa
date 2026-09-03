@@ -9,5 +9,5 @@ SFM-003,signal processing,filter and range-check the sample,slow drift within to
 SFM-004,signal processing,filter and range-check the sample,erroneous high reading,filtered value biased high,brake ECU over-boosts,SR,SG-002,SM-002,range and gradient check
 SFM-005,CAN transceiver,transmit the pressure frame,loss of transmission,no frame on the bus,receiver times out with no pressure value,SR,SG-003,SM-003,E2E counter makes the loss detectable
 SFM-006,CAN transceiver,transmit the pressure frame,delayed frame,frame arrives after its slot,brake assist reacts late,SR,SG-004,SM-003,rolling counter detects the delay
-SFM-007,supply monitor,hold the sensor supply in band,undetected slow supply droop,reference drifts,all readings biased with no indication,SR,SG-001,,no mechanism monitors a slow droop below the trip point
+SFM-007,supply monitor,hold the sensor supply in band,undetected slow supply droop,reference drifts,all readings biased with no indication,SR,SG-001,SM-005,ratiometric comparison against an independent reference detects drift below the SM-004 trip point
 SFM-008,housing,retain the sensing element,mechanical wear,seal degrades over life,none within the qualified profile,SAFE,,,no safety effect inside the qualified vibration profile

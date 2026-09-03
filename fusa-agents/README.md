@@ -105,10 +105,14 @@ owning upstream work product into `rework` — the same feedback loop reviewers 
 `config/aspice-map.yaml` maps work products to ASPICE base practices; `fusa aspice` reports coverage.
 
 `fusa --author deterministic --reviewer rules run-all` produces all sixteen enabled work products with
-no API key. In the shipped sample data one is legitimately unfinished: the supply monitor's slow droop
-(`SFM-007`) has no safety mechanism, so the FMEA flags it `uncovered`, the feedback loop returns TSC to
-`rework`, and the three phase-7 products that depend on the concept wait rather than certify one under
-rework. Cover that failure mode in `input/safety-mechanisms.csv` and the chain completes.
+no API key, every one `reviewed`, and traces each safety goal down to its test cases. Four release
+blockers remain, each naming what it needs: the S×E×C table (fill `_reference-register/asil-table.yaml`
+from your licensed standard), cppcheck and semgrep (install them), and the cybersecurity goals owed by
+the treated threat scenarios.
+
+Delete `SM-005` from `input/safety-mechanisms.csv` to watch the feedback loop work: SYS-FMEA flags the
+supply droop `uncovered`, TSC returns to `rework`, and the phase-7 products wait rather than certify a
+concept under rework.
 
 Still out of scope (by design, for now): executing tests on target / platform performance measurement, HLD/LLD agents
 beyond the declared rows, and a real codebeamer transport. The seams for each exist (`kind: runner`, `agents.yaml`,

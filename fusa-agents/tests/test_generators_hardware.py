@@ -151,11 +151,7 @@ def test_the_entire_chain_runs_with_no_api_key(workspace, monkeypatch):
     o = Orchestrator(root=workspace, dry_run=True, author="deterministic", reviewer="rules")
     o.run_all(log=lambda *a: None)
     statuses = {s.work_product: o.reg.process.status(s.work_product) for s in o.plan()}
-    assert Status.NOT_STARTED not in statuses.values()        # every agent got its turn
-    assert statuses["TSC"] is Status.REWORK                   # the uncovered failure mode sent it back
-    # and the phase-7 products that depend on the concept wait for it, rather than certifying
-    # a concept that is under rework
-    blocked = {wp for wp, st in statuses.items() if st is Status.BLOCKED}
-    assert blocked == {"TEST-SPEC", "TRACEABILITY", "TSC-CLOSURE"}
-    assert all(st is Status.REVIEWED for wp, st in statuses.items()
-               if wp not in blocked | {"TSC"})
+    # every mode in the sample is covered, so nothing is returned and nothing waits behind it
+    assert all(st is Status.REVIEWED for st in statuses.values()), \
+        {wp: st.value for wp, st in statuses.items() if st is not Status.REVIEWED}
+    assert len(statuses) == 16

@@ -58,13 +58,22 @@ def test_cybersecurity_goals_need_the_tara_first(workspace):
 
 # ---- closure ----------------------------------------------------------------
 
-def test_every_analysis_finding_is_carried_back(chain):
+def test_every_analysis_finding_is_carried_back(chain, workspace):
+    (workspace / "input" / "failure-modes.csv").write_text(
+        "element,function,failure_mode,local_effect,item_effect,classification,violated_sg,sm\n"
+        "supply monitor,hold supply,slow droop,reference drifts,readings biased,SR,SG-001,\n")
+    chain.reg.generated.write("SYS-FMEA", chain.resolve("sys-fmea")[1].run())
     flagged = [i for wp in ("SYS-FMEA", "HW-FMEDA") for i in chain.reg.generated.items(wp)
                if i.fields.get("finding")]
     closure = items(chain, "tsc-close-the-loop")
-    assert len(closure) == len(flagged) == 1                 # the uncovered supply droop
-    assert closure[0].fields["parent"] == "SFM-007"
+    assert len(closure) == len(flagged) == 1
+    assert closure[0].fields["element"] == "supply monitor"
     assert closure[0].fields["returns_to"] == "sys-tsc" and closure[0].fields["status"] == "open"
+
+
+def test_a_complete_analysis_leaves_an_empty_closure(chain):
+    """The shipped sample covers every mode, so there is nothing to carry back."""
+    assert not items(chain, "tsc-close-the-loop")
 
 
 def test_no_findings_means_an_empty_closure_not_a_fabricated_one(chain, workspace):
@@ -141,3 +150,24 @@ def test_sixteen_work_products_are_produced_with_no_api_key(workspace, monkeypat
     for agent_id in ("test-spec-agent", "traceability-agent", "tsc-close-the-loop"):
         assert o.run(agent_id, log=lambda *a: None) is Status.REVIEWED, agent_id
     assert len(o.plan()) == 16
+
+
+def test_a_generator_declares_every_work_product_it_reads(workspace):
+    """A generator that reads an upstream it does not require gets sequenced before it and
+    silently produces a thinner document — which is how HW-DESIGN fell out of the traceability
+    matrix without anything failing."""
+    from fusa.agents.registry import load_specs
+    specs = load_specs(workspace / "config" / "agents.yaml")
+    known = {s.work_product for s in specs}
+    for spec in specs:
+        cfg = spec.generator or {}
+        reads = set()
+        for key in ("from", "elements_from", "chain"):
+            value = cfg.get(key)
+            reads |= set(value) if isinstance(value, list) else ({value} if value else set())
+        # the traceability chain is optional in config; its default is the one the code walks
+        if cfg.get("kind") == "traceability" and "chain" not in cfg:
+            from fusa.generators.kinds import TRACE_CHAIN
+            reads |= set(TRACE_CHAIN)
+        missing = sorted((reads & known) - set(spec.requires) - {spec.work_product})
+        assert not missing, f"{spec.id} reads {missing} but does not require them"
