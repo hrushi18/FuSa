@@ -171,3 +171,20 @@ def test_a_generator_declares_every_work_product_it_reads(workspace):
             reads |= set(TRACE_CHAIN)
         missing = sorted((reads & known) - set(spec.requires) - {spec.work_product})
         assert not missing, f"{spec.id} reads {missing} but does not require them"
+
+
+def test_the_tara_stops_owing_goals_once_they_exist(chain):
+    """A marker that can never clear blocks the release for ever: TARA asked for cybersecurity
+    goals, cs-goals delivered them, and the ask has to stop."""
+    assert any("cybersecurity goal derivation" in p
+               for p in ids.find_pending(chain.resolve("cs-tara")[1].run()))
+    chain.reg.generated.write("CSG", chain.resolve("cs-goals")[1].run())
+    assert not [p for p in ids.find_pending(chain.resolve("cs-tara")[1].run())
+                if "cybersecurity goal derivation" in p]
+
+
+def test_a_partly_answered_tara_asks_only_for_what_is_missing(chain):
+    chain.reg.generated.write("CSG", "---\nid: CSG\n---\n\n### CSG-001\n- parent: TS-001\n- text: g\n")
+    owed = [p for p in ids.find_pending(chain.resolve("cs-tara")[1].run())
+            if "cybersecurity goal derivation" in p]
+    assert owed and "for 3 treated" in owed[0]          # four treated, one already answered

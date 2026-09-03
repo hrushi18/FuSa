@@ -37,9 +37,23 @@ def _write(tmp_path, xml):
     p = tmp_path / "x.reqif"; p.write_text(xml, encoding="utf-8"); return p
 
 
+CPPCHECK_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<results version="2"><cppcheck version="2.21"/><errors>
+  <error id="bufferAccessOutOfBounds" severity="error" msg="Buffer is accessed out of bounds: buf" cwe="788">
+    <location file="input/src/pressure.c" line="13"/></error>
+  <error id="constParameter" severity="style" msg="Parameter can be const">
+    <location file="input/src/pressure.c" line="9"/></error>
+</errors></results>
+"""
+
+
 def test_parsers(tmp_path):
+    """The fixture lives here rather than in input/reports/, which a run regenerates — a test
+    pinned to tool output silently asserts whatever the tool last happened to say."""
     from fusa.runners import parsers
-    cpp = parsers.parse_cppcheck_xml(ROOT / "input/reports/cppcheck.xml")
+    xml = tmp_path / "cppcheck.xml"
+    xml.write_text(CPPCHECK_XML, encoding="utf-8")
+    cpp = parsers.parse_cppcheck_xml(xml)
     assert {f.severity for f in cpp} == {"error", "info"} and cpp[0].tags == ["CWE-788"]
     p = tmp_path / "vuln.sarif"
     p.write_text(json.dumps(VULN_SARIF), encoding="utf-8")

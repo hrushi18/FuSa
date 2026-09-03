@@ -13,6 +13,7 @@ import yaml
 from .. import config
 from ..models import AgentSpec
 from ..registers import Registers
+from ..tools import ids as from_base          # id spelling rules, shared with the gate
 from .base import InputMissing, Result, Row, read_table
 
 ASIL_TABLE_FILE = "asil-table.yaml"
@@ -363,8 +364,16 @@ def generate_tara(cfg: dict, reg: Registers, spec: AgentSpec) -> Result:
         if row.fields["treatment"] in ("avoid", "reduce", "share"):
             treated.append(row)
 
-    if treated:
-        pending.append(f"cybersecurity goal derivation for {len(treated)} treated threat scenario(s) "
+    # Only what is genuinely outstanding: a goal already derived is not still owed, and a marker
+    # that can never clear blocks the release for ever. Matching is by id, so a scenario whose id
+    # this run assigns (rather than the table pinning it) counts as owed — claiming a goal exists
+    # for an id that did not exist when the goals were written is the error worth avoiding.
+    goals_wp = cfg.get("goals_work_product", "CSG")
+    covered = {p for i in reg.generated.items(goals_wp) for p in i.refs("parent")} \
+        if reg.generated.exists(goals_wp) else set()
+    owed = [r for r in treated if from_base.canonical(r.id or "") not in covered]
+    if owed:
+        pending.append(f"cybersecurity goal derivation for {len(owed)} treated threat scenario(s) "
                        f"<- {cfg.get('goals_agent', 'cs-goals')}")
     return Result(rows=out, pending=pending)
 
