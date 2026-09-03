@@ -20,3 +20,6 @@
 - An item with no `rule:` is a matter of judgement and is reported as a `minor` finding naming its
   clause — the confirmation review a person owes (26262-8 §9), recorded rather than assumed.
 - Items marked `check: structural` belong to the gate and are never reported twice.
+- Every work product ends with a `## Open points` section naming each `[PENDING: …]` it contains
+  (rule `pending_listed`), and cites in its body each clause it is responsible for
+  (rule `cites_clauses`). The markers stay beside the item they concern; the section is the index.

@@ -180,3 +180,57 @@ def test_every_shipped_rule_names_a_kind_that_exists():
         for item in yaml.safe_load(f.read_text(encoding="utf-8"))["items"]:
             if item.get("rule"):
                 assert item["rule"]["kind"] in RULES, f"{f.stem}/{item['id']}"
+
+
+# ---- the generic checklist: rules that apply to every work product ----------
+
+GENERIC_CASES = [
+    ("a pending with no section",  "[PENDING: x <- me]\n", "no `## Open points` section"),
+    ("a section missing one",      "[PENDING: a <- me]\n[PENDING: b <- me]\n\n## Open points\n\n- a <- me\n",
+                                   "open point not listed in the section: b <- me"),
+]
+
+
+@pytest.mark.parametrize("name,body,expected", GENERIC_CASES)
+def test_open_points_must_list_every_pending(orch, name, body, expected):
+    from fusa.agents.rulereview import Ctx, rule_pending_listed
+    failures = rule_pending_listed(Ctx(orch.by_id["hw-hsr"], f"---\nid: HSR\n---\n\n{body}", None, {}))
+    assert any(expected in f for f in failures), name
+
+
+@pytest.mark.parametrize("body", ["[PENDING: x <- me]\n\n## Open points\n\n- x <- me\n",
+                                  "### HSR-001\n- text: nothing open here\n"])
+def test_a_complete_or_empty_open_points_section_passes(orch, body):
+    from fusa.agents.rulereview import Ctx, rule_pending_listed
+    assert rule_pending_listed(Ctx(orch.by_id["hw-hsr"], f"---\nid: HSR\n---\n\n{body}", None, {})) == []
+
+
+def test_a_clause_listed_only_in_front_matter_is_not_cited(orch):
+    """Naming a clause in the header is bookkeeping; citing it in the text is the claim."""
+    from fusa.agents.rulereview import Ctx, rule_cites_clauses
+    spec = orch.by_id["hw-hsr"]
+    front_only = f"---\nid: HSR\nclauses: {', '.join(spec.clauses)}\n---\n\n### HSR-001\n- text: t\n"
+    assert rule_cites_clauses(Ctx(spec, front_only, None, {}))
+    cited = f"---\nid: HSR\n---\n\nProduced under {', '.join(spec.clauses)}.\n\n### HSR-001\n- text: t\n"
+    assert rule_cites_clauses(Ctx(spec, cited, None, {})) == []
+
+
+def test_generic_checklist_now_decides_two_of_its_items(workspace):
+    import yaml
+    items = yaml.safe_load((workspace / "_checklist-register" / "generic.yaml").read_text())["items"]
+    ruled = {i["id"] for i in items if i.get("rule")}
+    judged = {i["id"] for i in items if i.get("check") == "review" and not i.get("rule")}
+    assert ruled == {"GEN-05", "GEN-06"}
+    assert judged == {"GEN-03", "GEN-04"}          # per-statement citation and invention: judgement
+
+
+def test_generated_work_products_satisfy_the_generic_rules(workspace):
+    """The rules were added with the generators made to comply, not the other way round."""
+    from fusa.orchestrator import Orchestrator
+    o = Orchestrator(root=workspace, dry_run=True, author="deterministic", reviewer="rules")
+    for agent_id in ("sys-hara", "sys-sads", "sys-tsr", "sm-catalog", "sys-tsc", "hw-hsr"):
+        wp = o.by_id[agent_id].work_product
+        o.reg.generated.write(wp, o.resolve(agent_id)[1].run())
+    verdict = reviewer(o, "hw-hsr").run(o.reg.generated.read("HSR"))
+    assert {f.id for f in verdict.findings} == {"GEN-03", "GEN-04"}     # only the judgement ones
+    assert verdict.verdict == "approved"

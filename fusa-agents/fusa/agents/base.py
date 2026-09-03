@@ -97,7 +97,11 @@ Ids are framework-owned — you write the content, not the bookkeeping:
 - Ids owned by other work products: {foreign}.
   Content that belongs to one of those is written as prose or as [PENDING: ... <- owning-agent-id] —
   never as a `###` item here. Giving it an id would claim a trace this work product cannot own.
-- Use [PENDING: ... <- agent-id] for anything you cannot derive from the inputs given."""
+- Use [PENDING: ... <- agent-id] for anything you cannot derive from the inputs given.
+
+Two things the checklist checks mechanically, so do not omit them:
+- cite each of the clauses above in the body where it applies, not only in the front matter;
+- if anything is left open, end with a `## Open points` section listing every [PENDING: …] you wrote."""
 
     def user_prompt(self) -> str:
         blocks = ["# Inputs available to you"]
@@ -142,7 +146,11 @@ Ids are framework-owned — you write the content, not the bookkeeping:
         sm = "- sm: SM-001\n" if "SM-CATALOG" in s.requires else ""
         parent_line = f"- parent: {parent}\n" if parent else ""
         missing = [u for u in s.requires if not self.reg.generated.exists(u)]
-        pending = f"\n[PENDING: derivation from {missing[0]} <- {self._owner(missing[0])}]\n" if missing else ""
+        gap = f"derivation from {missing[0]} <- {self._owner(missing[0])}" if missing else ""
+        pending = f"\n[PENDING: {gap}]\n" if gap else ""
+        # the stub follows the same house conventions it stands in for, so an offline run
+        # exercises the checklist rules rather than tripping over them
+        open_points = f"\n## Open points\n\n- {gap}\n" if gap else ""
         return f"""---
 id: {wp}
 title: {s.title}
@@ -154,7 +162,7 @@ status: draft
 
 # {s.title}
 
-Dry-run content generated without a model call. Responsible clause: {s.clauses[0] if s.clauses else "n/a"}.
+Dry-run content generated without a model call. Produced under {", ".join(s.clauses) or "no declared clause"}.
 {pending}
 ### {px}-001
 {parent_line}- asil: B
@@ -163,7 +171,7 @@ Dry-run content generated without a model call. Responsible clause: {s.clauses[0
 ### {px}-002
 {parent_line}- asil: B
 {sm}- text: Second {wp} item (dry run).
-"""
+{open_points}"""
 
 
 class ReviewAgent(Agent):

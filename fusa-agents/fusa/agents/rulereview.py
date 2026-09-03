@@ -170,9 +170,44 @@ def rule_defined_once(ctx: Ctx) -> list[str]:
     return out
 
 
+OPEN_POINTS_RE = re.compile(r"^#{1,6}\s*open points\b.*$", re.I | re.M)
+
+
+def rule_pending_listed(ctx: Ctx) -> list[str]:
+    """Every PENDING marker is also named in the open-points section.
+
+    A marker buried beside the item it belongs to is easy to miss when reading the document as
+    a reviewer or an assessor would; the section is the one place that has to be complete.
+    """
+    pending = ids.find_pending(ctx.content)
+    if not pending:
+        return []                                  # nothing open: no section needed
+    m = OPEN_POINTS_RE.search(ctx.content)
+    if not m:
+        return [f"{len(pending)} open point(s) but no `## Open points` section"]
+    section = ctx.content[m.end():]
+    nxt = re.search(r"^#{1,2}\s+\S", section, re.M)  # the section runs to the next top-level heading
+    section = section[:nxt.start()] if nxt else section
+    return [f"open point not listed in the section: {p[:80]}" for p in pending if p.strip() not in section]
+
+
+def rule_cites_clauses(ctx: Ctx) -> list[str]:
+    """The body cites every clause this work product is responsible for.
+
+    Front matter is excluded: listing a clause in the header is bookkeeping, citing it in the
+    text is the claim the checklist is after.
+    """
+    if ctx.target is None or not ctx.target.clauses:
+        return []
+    body = ids.FRONT_MATTER_RE.sub("", ctx.content)
+    return [f"clause {c} is declared for this work product but never cited in the body"
+            for c in ctx.target.clauses if c not in body]
+
+
 RULES = {"fields": rule_fields, "field_in": rule_field_in, "refs": rule_refs,
          "time_budget": rule_time_budget, "asil_inherit": rule_asil_inherit,
-         "aux": rule_aux, "matches": rule_matches, "defined_once": rule_defined_once}
+         "aux": rule_aux, "matches": rule_matches, "defined_once": rule_defined_once,
+         "pending_listed": rule_pending_listed, "cites_clauses": rule_cites_clauses}
 
 
 class RuleReviewAgent:

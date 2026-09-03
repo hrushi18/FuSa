@@ -113,6 +113,16 @@ class GeneratorAgent:
             if r.parent_of is not None:
                 r.fields["parent"] = r.parent_of.id
 
+    @staticmethod
+    def _open_points(content: str) -> str:
+        """One index of everything still open. The markers themselves stay where they belong,
+        beside the item they concern; this lists them without repeating the `[PENDING: …]`
+        syntax, so nothing is counted twice."""
+        pending = ids.find_pending(content)
+        if not pending:
+            return ""
+        return "\n## Open points\n\n" + "\n".join(f"- {p}" for p in pending) + "\n"
+
     def _render(self, result: Result) -> str:
         s = self.spec
         self._assign_ids(result.rows)
@@ -121,7 +131,8 @@ class GeneratorAgent:
                f"status: draft\ngenerated_from: {self.cfg.get('input', '—')}\n---\n",
                f"# {s.title}\n",
                result.intro or f"Generated deterministically from input/{self.cfg.get('input', '—')}. "
-                               "Every value here was entered or derived, never inferred by a model.\n"]
+                               "Every value here was entered or derived, never inferred by a model.\n",
+               f"Produced under {', '.join(s.clauses)}.\n" if s.clauses else ""]
         for p in result.pending:
             out.append(f"[PENDING: {p}]\n")
         for r in result.rows:
@@ -131,6 +142,7 @@ class GeneratorAgent:
                 out.append(r.note)
             out.append("")
         content = "\n".join(out)
+        content += self._open_points(content)
         content, notes = ids.normalise_items(content, s.prefixes, s.work_product, {})
         self.last_notes += notes
         return content.rstrip() + "\n"
