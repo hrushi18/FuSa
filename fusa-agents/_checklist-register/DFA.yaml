@@ -1,11 +1,19 @@
 work_product: DFA
 extends: generic          # front matter, id convention, open points, clause citation
 items:
-  - {id: DFA-01, text: every item is an independence claim naming both sides,                        clause: "26262-9:7.4.1", check: review, rule: {kind: fields, where: {field: claim, present: true}, require: [claim, elements]}}
+  - {id: DFA-01, text: every independence claim names both sides,                                    clause: "26262-9:7.4.1", check: review, rule: {kind: fields, where: {field: claim_kind, is: independence}, require: [claim, elements]}}
   - {id: DFA-02, text: every applicable coupling factor states its category, initiator and effect,   clause: "26262-9:7.4.2", check: review, rule: {kind: fields, where: {field: coupling_factor, present: true}, require: [category, initiator, effect]}}
   - {id: DFA-03, text: category is common_cause or cascading,                                        clause: "26262-9:7.4.2", check: review, rule: {kind: field_in, field: category, values: [common_cause, cascading]}}
-  - {id: DFA-04, text: every coupling factor reaches a verdict,                                      clause: "26262-9:7.4.3", check: review, rule: {kind: field_in, field: verdict, values: [mitigated, open]}}
+  - {id: DFA-04, text: a stated verdict is one the house method allows,                              clause: "26262-9:7.4.3", check: review, rule: {kind: field_in, field: verdict, values: [mitigated, open, not_applicable]}}
   - {id: DFA-05, text: a mitigated coupling factor names the measure that breaks it,                 clause: "26262-9:7.4.3", check: review, rule: {kind: fields, where: {field: verdict, is: mitigated}, require: [measure]}}
   - {id: DFA-06, text: an open coupling factor is a finding routed to the design owner,              clause: "26262-9:7.4.4", check: review, rule: {kind: fields, where: {field: verdict, is: open}, require: [finding, returns_to]}}
   - {id: DFA-07, text: every referenced safety mechanism exists in SM-CATALOG,                       clause: "26262-4:6.4.2", check: review, rule: {kind: refs, field: sm}}
   - {id: DFA-08, text: the coupling-factor walk is complete — factors ruled out are recorded with a reason, clause: "26262-9:7.4.2", check: review}
+  # a factor analysed away is evidence, but only if it says why; and a factor with no verdict at all
+  # is an unfinished walk, which field_in cannot see
+  - {id: DFA-09, text: every coupling factor reaches a verdict,                                      clause: "26262-9:7.4.3", check: review, rule: {kind: fields, where: {field: coupling_factor, present: true}, require: [verdict]}}
+  - {id: DFA-10, text: a factor ruled out carries the rationale that rules it out,                   clause: "26262-9:7.4.2", check: review, rule: {kind: fields, where: {field: verdict, is: not_applicable}, require: [rationale]}}
+  - {id: DFA-11, text: every claim says which kind it is,                                            clause: "26262-9:7.4.1", check: review, rule: {kind: fields, where: {field: claim, present: true}, require: [claim_kind]}}
+  - {id: DFA-14, text: claim kind is independence or freedom_from_interference,                     clause: "26262-9:7.4.1", check: review, rule: {kind: field_in, field: claim_kind, values: [independence, freedom_from_interference]}}
+  - {id: DFA-12, text: a freedom-from-interference claim names the protected and interfering elements and the interference type, clause: "26262-6:7.4.11", check: review, rule: {kind: fields, where: {field: claim_kind, is: freedom_from_interference}, require: [protected, interferer, interference_type]}}
+  - {id: DFA-13, text: interference type is timing_execution, memory or exchange_of_information,     clause: "26262-6:7.4.11", check: review, rule: {kind: field_in, field: interference_type, values: [timing_execution, memory, exchange_of_information]}}

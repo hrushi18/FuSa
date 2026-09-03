@@ -56,9 +56,15 @@ def run_gate(spec: AgentSpec, content: str, store: GeneratedStore, *, require_fu
     # orphan parents
     known = set(store_ids) | {i.id for i in items}
     for i in items:
-        for p in i.refs("parent"):
+        parents = i.refs("parent")
+        for p in parents:
             if p not in known:
                 errors.append(f"{i.id}: parent {p} does not exist")
+        if len(parents) > 1:
+            # the convention allows exactly one parent, so a second is silently untraceable:
+            # two links where the grammar records one. A fault tree says it with `also_under:`.
+            warnings.append(f"{i.id}: {len(parents)} parents ({', '.join(parents)}) — the convention "
+                            "allows one; split the item, or use `also_under:` for a repeated event")
 
     # gates without children: every item of a covered upstream must have a child here
     covered = {p for i in items for p in i.refs("parent")}

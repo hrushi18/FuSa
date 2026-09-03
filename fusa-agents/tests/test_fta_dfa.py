@@ -25,6 +25,7 @@ Produced under 26262-4:7.4.3, 26262-9:8.
 - element: sense IC
 - failure_mode: SFM-002
 - sm: SM-001
+- dc: 99% for stuck-at and open faults (PSX-42 safety manual 4.2, quantified in HW-FMEDA)
 - cut_set_order: 1
 
 ### FTA-003
@@ -46,6 +47,7 @@ id: SYS-DFA
 Produced under 26262-9:7.
 
 ### DFA-001
+- claim_kind: independence
 - claim: the SM-002 plausibility check is independent of the sense IC it monitors
 - elements: sense IC, signal processing
 - parent: TSC-002
@@ -201,3 +203,113 @@ def test_no_enabled_agent_still_uses_a_placeholder_method(workspace):
         if spec.method:
             text = (workspace / "_reference-register" / "methods" / f"{spec.method}.md").read_text()
             assert "placeholder" not in text.lower(), spec.id
+
+
+# ---- the six defects found reviewing the first draft of these methods ----------
+
+def test_a_node_with_children_and_no_gate_is_an_unfinished_tree(review):
+    """field_in only validates a gate that was written; an omitted one used to pass."""
+    bad = GOOD_FTA.replace("- parent: SG-001\n- gate: OR", "- parent: SG-001")
+    assert "missing gate" in majors(review("sys-fta", bad))["FTA-09"]
+
+
+def test_a_coupling_factor_with_no_verdict_at_all_is_caught(review):
+    bad = GOOD_DFA.replace("- verdict: mitigated\n", "")
+    assert "missing verdict" in majors(review("sys-dfa", bad))["DFA-09"]
+
+
+def test_a_factor_ruled_out_by_construction_is_not_a_finding(review):
+    """The first draft had no `not_applicable`, so correct analysis was forced to `open` and
+    routed as a dependent failure — which teaches the analyst to invent a measure."""
+    ruled_out = GOOD_DFA.replace(
+        "- measure: SM-004\n- sm: SM-004\n- verdict: mitigated",
+        "- verdict: not_applicable\n- rationale: the parts run from separate oscillators; "
+        "no shared timebase exists")
+    verdict = review("sys-dfa", ruled_out)
+    assert verdict.verdict == "approved", majors(verdict)
+
+
+def test_ruling_a_factor_out_still_needs_the_reason(review):
+    bad = GOOD_DFA.replace("- measure: SM-004\n- sm: SM-004\n- verdict: mitigated",
+                           "- verdict: not_applicable")
+    assert "missing rationale" in majors(review("sys-dfa", bad))["DFA-10"]
+
+
+FFI = """---
+id: SYS-DFA
+---
+
+# System DFA
+
+Produced under 26262-9:7.
+
+### DFA-001
+- claim_kind: freedom_from_interference
+- claim: the diagnostic logger must not delay the control task
+- protected: control task (ASIL D)
+- interferer: diagnostic logger (QM)
+- interference_type: timing_execution
+
+### DFA-002
+- parent: DFA-001
+- coupling_factor: shared software resource or task
+- category: cascading
+- initiator: the logger overruns its budget and holds the CPU past the control task's release
+- effect: the control loop misses its 1 ms deadline while the logger still runs
+- measure: SM-004
+- sm: SM-004
+- verdict: mitigated
+"""
+
+
+def test_freedom_from_interference_is_a_claim_this_method_can_express(review):
+    """26262-6:7.4.11 is asymmetric — the first draft had only symmetric independence claims."""
+    verdict = review("sys-dfa", FFI)
+    assert verdict.verdict == "approved", majors(verdict)
+
+
+def test_an_interference_claim_must_name_both_roles_and_the_type(review):
+    bad = FFI.replace("- protected: control task (ASIL D)\n", "").replace(
+        "- interference_type: timing_execution", "- interference_type: electrical")
+    found = majors(review("sys-dfa", bad))
+    assert "missing protected" in found["DFA-12"]
+    assert "not one of timing_execution, memory, exchange_of_information" in found["DFA-13"]
+
+
+def test_an_independence_rule_does_not_fire_on_an_interference_claim(review):
+    """DFA-01 wants `elements`; an FFI claim names roles instead, and must not be flagged for it."""
+    assert "DFA-01" not in majors(review("sys-dfa", FFI))
+
+
+def test_a_claim_must_say_which_kind_it_is(review):
+    bad = GOOD_DFA.replace("- claim_kind: independence\n", "")
+    assert "missing claim_kind" in majors(review("sys-dfa", bad))["DFA-11"]
+
+
+def test_a_leaf_claiming_a_mechanism_states_its_coverage(review):
+    """A mechanism does not make a leaf safe, it makes it partly covered."""
+    bad = GOOD_FTA.replace("- dc: 99% for stuck-at and open faults "
+                           "(PSX-42 safety manual 4.2, quantified in HW-FMEDA)\n", "")
+    assert "missing dc" in majors(review("sys-fta", bad))["FTA-11"]
+
+
+def test_a_repeated_event_is_named_once_and_its_other_gates_must_exist(review):
+    """Splitting a repeated event into two ids would count one cause as two independent ones."""
+    good = GOOD_FTA.replace("- cut_set_order: 1\n- finding", "- also_under: FTA-001\n- cut_set_order: 1\n- finding")
+    assert review("sys-fta", good).verdict == "approved"
+    bad = GOOD_FTA.replace("- element: supply monitor", "- element: supply monitor\n- also_under: FTA-404")
+    assert "also_under FTA-404 does not exist" in majors(review("sys-fta", bad))["FTA-10"]
+
+
+def test_the_gate_warns_when_an_item_claims_two_parents(workspace):
+    """The grammar accepted a second parent silently while the convention forbade it."""
+    from fusa.gate import run_gate
+    from fusa.orchestrator import Orchestrator
+    o = Orchestrator(root=workspace, dry_run=True)
+    o.reg.generated.write("SADS", "---\nid: SADS\n---\n\n### SG-001\n- text: g\n")
+    content = ("---\nid: SYS-FTA\n---\n\n### FTA-001\n- top_event: t\n- parent: SG-001\n- gate: OR\n\n"
+               "### FTA-002\n- parent: FTA-001\n- gate: AND\n\n"
+               "### FTA-003\n- parent: FTA-001, FTA-002\n- basic_event: b\n- element: e\n")
+    res = run_gate(o.by_id["sys-fta"], content, o.reg.generated)
+    assert res.passed                                            # not an error: existing work still gates
+    assert any("2 parents" in w and "also_under" in w for w in res.warnings)
