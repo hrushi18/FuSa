@@ -29,6 +29,7 @@ python -m fusa plan                        # creation order from the dependency 
 FUSA_DRY_RUN=1 python -m fusa run-all      # whole chain offline, deterministic stubs, no API key
 export ANTHROPIC_API_KEY=...               # then for real:
 python -m fusa run sys-sads                # one agent: author → gate → independent review
+python -m fusa --reviewer rules run-all    # review by executing the checklist — deterministic, no key
 python -m fusa run-all
 python -m fusa status                      # live board
 python -m fusa gate TSC                    # re-run the structural gate on a work product
@@ -71,6 +72,7 @@ are also settable live in the dashboard (**⚙ LLM**), or once in a gitignored `
 | One id convention, no id ever throws | `ids.canonical` is the single spelling rule (`sr-1` → `SR-001`) used at both boundaries — `reqtable.normalise_ids` for the spreadsheet, `ids.normalise_items` for authored work products. Blanks are assigned, repeats renumbered, junk replaced; every change is reported, none is an error. `fusa gate` also works on an imported work product (`SYS-REQ`), which has no agent |
 | Ids belong to the framework, not the model | `ids.normalise_items` runs on every authored draft before the gate: `### HZ-nnn` placeholders are numbered, `HZ-1` padded, duplicates renumbered, `## HZ-002 — title` recovered into an item + `- title:`, and an id owned by another work product (`AOU` in a HARA) is demoted to commentary naming its owner instead of failing the run |
 | Independent review | `ReviewAgent` is constructed on `ConventionsView`, which has no `.method()`; asserted in code and in tests |
+| Review without a model | `--reviewer rules` (or `FUSA_REVIEWER=rules`) executes the checklist instead of reading it to an LLM: 22 of the 34 judgement items carry a `rule:` and are decided deterministically; the rest become `minor` findings naming the clause, so the confirmation review a person owes (26262-8 §9) is visible rather than implied |
 | Feedback loop | a reviewer finding with `returns_to: <agent>` puts that upstream work product into `REWORK` |
 
 ## V-cycle coverage — three kinds of building block

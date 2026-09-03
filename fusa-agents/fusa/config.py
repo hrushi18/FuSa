@@ -61,5 +61,9 @@ MAX_TOKENS = int(os.environ.get("FUSA_MAX_TOKENS", "6000"))
 # FUSA_DRY_RUN=1 runs the full chain with deterministic stub content and no API calls.
 DRY_RUN = os.environ.get("FUSA_DRY_RUN", "0") == "1"
 
+# Independent review: "model" (an LLM reads the checklist) or "rules" (the checklist's own
+# rules are executed — deterministic, no API key, judgement items raised for human sign-off).
+REVIEWER = os.environ.get("FUSA_REVIEWER", "model")
+
 # Strict gating: a downstream agent may not start while an upstream has PENDING markers.
 STRICT_PENDING = os.environ.get("FUSA_STRICT_PENDING", "0") == "1"

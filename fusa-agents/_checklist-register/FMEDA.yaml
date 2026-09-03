@@ -1,6 +1,6 @@
 work_product: FMEDA
 items:
   - {id: FMEDA-01, text: failure rates carry a cited source and mission profile,             clause: "26262-5:8",       check: review}
-  - {id: FMEDA-02, text: metrics are attached from tooling (metrics.md), not computed in prose, clause: "26262-5:8",    check: review}
-  - {id: FMEDA-03, text: DC claims reference an SM id and a justification,                  clause: "26262-5:Annex C", check: review}
+  - {id: FMEDA-02, text: metrics are attached from tooling (metrics.md), not computed in prose, clause: "26262-5:8",    check: review, rule: {kind: aux, file: metrics.md}}
+  - {id: FMEDA-03, text: DC claims reference an SM id and a justification,                  clause: "26262-5:Annex C", check: review, rule: {kind: refs, field: sm, required: true}}
   - {id: FMEDA-04, text: missed targets are findings with returns_to, not explained away,   clause: "26262-5:9",       check: review}

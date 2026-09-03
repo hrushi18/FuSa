@@ -14,6 +14,7 @@ from ..models import AgentSpec
 from ..registers import Registers
 from .base import AuthoringAgent, ReviewAgent
 from .llm import LLM
+from .rulereview import RuleReviewAgent
 
 
 class AgentsFileError(ValueError):
@@ -69,7 +70,13 @@ def build_agents(specs: list[AgentSpec], registers: Registers, llm: LLM) -> dict
     return agents
 
 
-def build_reviewer(review_spec: AgentSpec, target: AgentSpec, registers: Registers, llm: LLM) -> ReviewAgent:
-    """One reviewer instance per work product, never the author's instance."""
+def build_reviewer(review_spec: AgentSpec, target: AgentSpec, registers: Registers, llm: LLM,
+                   kind: str = "model"):
+    """One reviewer instance per work product, never the author's instance.
+
+    kind="rules" reviews deterministically from the checklist and needs no model — the whole
+    chain then runs with no API key at all."""
     per_wp = review_spec.model_copy(update={"id": f"{review_spec.id}:{target.work_product}"})
+    if kind == "rules":
+        return RuleReviewAgent(per_wp, target, registers.checklists, registers.generated)
     return ReviewAgent(per_wp, target, registers.reference.conventions_only(), registers, llm)

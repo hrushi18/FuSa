@@ -24,10 +24,12 @@ class UnknownAgent(LookupError):
 
 
 class Orchestrator:
-    def __init__(self, root: Path | None = None, dry_run: bool | None = None, strict_pending: bool | None = None):
+    def __init__(self, root: Path | None = None, dry_run: bool | None = None, strict_pending: bool | None = None,
+                 reviewer: str | None = None):
         self.root = Path(root or config.ROOT)
         self.reg = Registers.load(self.root)
         self.llm = LLM(dry_run=dry_run)
+        self.reviewer_kind = reviewer or config.REVIEWER
         self.strict = config.STRICT_PENDING if strict_pending is None else strict_pending
         self.specs = load_specs(self.root / "config" / "agents.yaml")
         self.by_id = {s.id: s for s in self.specs}
@@ -136,7 +138,7 @@ class Orchestrator:
                     log(f"[{agent_id}]   {item.id} -> {target} ({up_wp}) set to REWORK")
 
         if review and spec.reviewed_by and self.review_spec:
-            reviewer = build_reviewer(self.review_spec, spec, self.reg, self.llm)
+            reviewer = build_reviewer(self.review_spec, spec, self.reg, self.llm, self.reviewer_kind)
             log(f"[{reviewer.id}] reviewing {wp} ...")
             verdict = reviewer.run(content)
             self.reg.generated.write_aux(wp, f"{wp}.review.json", verdict.model_dump_json(indent=2))

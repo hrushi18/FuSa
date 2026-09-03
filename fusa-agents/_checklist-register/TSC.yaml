@@ -1,6 +1,6 @@
 work_product: TSC
 items:
-  - {id: TSC-01, text: every TSR is allocated to an element and at least one SM id,              clause: "26262-4:6.4.2", check: review}
+  - {id: TSC-01, text: every TSR is allocated to an element and at least one SM id,              clause: "26262-4:6.4.2", check: review, rule: {kind: refs, field: sm, required: true}}
   - {id: TSC-02, text: every SM id referenced exists in SM-CATALOG,                               clause: "26262-4:6.4.2", check: structural}
-  - {id: TSC-03, text: detection + reaction time budget shown ≤ FTTI for each SG,                 clause: "26262-4:6.4.3", check: review}
-  - {id: TSC-04, text: architecture diagram present, Mermaid, SMs labelled by id,                 clause: "26262-4:6.4.4", check: review}
+  - {id: TSC-03, text: detection + reaction time budget shown ≤ FTTI for each SG,                 clause: "26262-4:6.4.3", check: review, rule: {kind: time_budget}}
+  - {id: TSC-04, text: architecture diagram present, Mermaid, SMs labelled by id,                 clause: "26262-4:6.4.4", check: review, rule: {kind: matches, pattern: "```mermaid", says: "no Mermaid architecture diagram in the document"}}

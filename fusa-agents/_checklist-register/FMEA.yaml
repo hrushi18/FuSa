@@ -1,5 +1,5 @@
 work_product: FMEA
 items:
-  - {id: FMEA-01, text: every element of the architecture has at least one FM row,          clause: "26262-9:8", check: review}
-  - {id: FMEA-02, text: every FM row classifies the failure mode and names SM ids or is flagged uncovered, clause: "26262-9:8", check: review}
+  - {id: FMEA-01, text: every element of the architecture has at least one FM row,          clause: "26262-9:8", check: review, rule: {kind: fields, require: [element, failure_mode, local_effect, item_effect, classification]}}
+  - {id: FMEA-02, text: every FM row classifies the failure mode and names SM ids or is flagged uncovered, clause: "26262-9:8", check: review, rule: {kind: field_in, field: classification, values: [SPF, RF, MPF, MPF_L, MPF_D, MPF_P, SAFE, SR]}}
   - {id: FMEA-03, text: "uncovered failure modes carry finding=uncovered and a returns_to sys-tsc", clause: "26262-9:8.4.9", check: review}

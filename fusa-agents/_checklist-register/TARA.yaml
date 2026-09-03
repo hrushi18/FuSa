@@ -1,7 +1,7 @@
 work_product: TARA
 items:
-  - {id: TARA-01, text: every asset names a cybersecurity property and a damage scenario,      clause: "21434:15.3", check: review}
+  - {id: TARA-01, text: every asset names a cybersecurity property and a damage scenario,      clause: "21434:15.3", check: review, rule: {kind: fields, prefix: AS, require: [property, damage_scenario]}}
   - {id: TARA-02, text: every threat scenario has exactly one parent asset,                      clause: "21434:15.4", check: structural}
-  - {id: TARA-03, text: impact rated in all four categories; safety impacts cite an SG id,       clause: "21434:15.5", check: review}
-  - {id: TARA-04, text: feasibility rating carries attack-potential rationale,                   clause: "21434:15.7", check: review}
-  - {id: TARA-05, text: risk value follows the house matrix and has a treatment decision,        clause: "21434:15.9", check: review}
+  - {id: TARA-03, text: impact rated in all four categories; safety impacts cite an SG id,       clause: "21434:15.5", check: review, rule: {kind: fields, prefix: TS, require: [impact]}}
+  - {id: TARA-04, text: feasibility rating carries attack-potential rationale,                   clause: "21434:15.7", check: review, rule: {kind: fields, prefix: TS, require: [feasibility, rationale]}}
+  - {id: TARA-05, text: risk value follows the house matrix and has a treatment decision,        clause: "21434:15.9", check: review, rule: {kind: fields, prefix: TS, require: [risk, treatment]}}
