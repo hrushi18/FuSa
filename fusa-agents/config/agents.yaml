@@ -113,20 +113,20 @@ agents:
     item_prefixes: [SFM]
     generator: {kind: fmea, input: failure-modes.csv, elements_from: TSC, returns_to: sys-tsc}
 
-  - {id: sys-fta, work_product: SYS-FTA, title: System FTA, phase: 2, requires: [TSC], clauses: ["26262-4:7.4.3", "26262-9:8"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [FTA]}
-  - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [DFA]}
+  - {id: sys-fta, work_product: SYS-FTA, title: System FTA, phase: 2, requires: [TSC], clauses: ["26262-4:7.4.3", "26262-9:8"], method: fta, conventions: [ids], checklist: FTA, enabled: false, item_prefixes: [FTA]}
+  - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: DFA, enabled: false, item_prefixes: [DFA]}
 
   # ── 3 · Hardware Level Analysis ───────────────────────────────────────────
   - {id: hw-design, work_product: HW-DESIGN, title: Hardware Design Specification, phase: 3, requires: [HSR], clauses: ["26262-5:7"], method: requirements-authoring, conventions: [ids], checklist: generic, item_prefixes: [HWD], generator: {kind: hardware-design, from: HSR, input: hardware-design.csv}}
   - {id: hw-fmea,   work_product: HW-FMEA,   title: Hardware FMEA, phase: 3, requires: [HW-DESIGN, SM-CATALOG], clauses: ["26262-5:7.4.3"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false, item_prefixes: [HFM]}
-  - {id: hw-fta,    work_product: HW-FTA,    title: Hardware FTA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-5:7.4.3"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [HFT]}
-  - {id: hw-dfa,    work_product: HW-DFA,    title: Hardware DFA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [HDF]}
+  - {id: hw-fta,    work_product: HW-FTA,    title: Hardware FTA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-5:7.4.3"], method: fta, conventions: [ids], checklist: FTA, enabled: false, item_prefixes: [HFT]}
+  - {id: hw-dfa,    work_product: HW-DFA,    title: Hardware DFA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: DFA, enabled: false, item_prefixes: [HDF]}
 
   # ── 4 · Software Level Analysis ───────────────────────────────────────────
   - {id: sw-arch,  work_product: SW-ARCH,  title: Software Architectural Design, phase: 4, requires: [SSR], clauses: ["26262-6:7"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [SWA]}
   - {id: sw-fmea,  work_product: SW-FMEA,  title: Software FMEA, phase: 4, requires: [SW-ARCH, SM-CATALOG], clauses: ["26262-6:7.4.10"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false, item_prefixes: [SWF]}
-  - {id: sw-fta,   work_product: SW-FTA,   title: Software FTA, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:7.4.10"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [SWT]}
-  - {id: sw-dfa,   work_product: SW-DFA,   title: Software DFA, phase: 4, requires: [SW-ARCH], clauses: ["26262-9:7", "26262-6:7.4.11"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [SWD]}
+  - {id: sw-fta,   work_product: SW-FTA,   title: Software FTA, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:7.4.10"], method: fta, conventions: [ids], checklist: FTA, enabled: false, item_prefixes: [SWT]}
+  - {id: sw-dfa,   work_product: SW-DFA,   title: Software DFA, phase: 4, requires: [SW-ARCH], clauses: ["26262-9:7", "26262-6:7.4.11"], method: dfa, conventions: [ids], checklist: DFA, enabled: false, item_prefixes: [SWD]}
   - {id: sw-calib, work_product: SW-CALIB, title: Calibration Data Safety Analysis, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:Annex C"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [CAL]}
 
   # ── 5 · Quantitative Analysis ─────────────────────────────────────────────

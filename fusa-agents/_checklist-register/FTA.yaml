@@ -1,0 +1,11 @@
+work_product: FTA
+extends: generic          # front matter, id convention, open points, clause citation
+items:
+  - {id: FTA-01, text: the top event is a safety goal violation and names the SG it violates,        clause: "26262-9:8.4.2", check: review, rule: {kind: fields, where: {field: top_event, present: true}, require: [top_event, parent]}}
+  - {id: FTA-02, text: every node with children states its gate,                                     clause: "26262-9:8.4.3", check: review, rule: {kind: field_in, field: gate, values: [AND, OR]}}
+  - {id: FTA-03, text: every basic event names the element and the failure mode behind it,           clause: "26262-9:8.4.3", check: review, rule: {kind: fields, where: {field: basic_event, present: true}, require: [element]}}
+  - {id: FTA-04, text: a single-point cut set with no mechanism is a finding routed to the design owner, clause: "26262-9:8.4.9", check: review, rule: {kind: fields, where: {field: finding, is: single_point_cut_set}, require: [returns_to, element]}}
+  - {id: FTA-05, text: a quoted probability carries its source,                                      clause: "26262-5:9",     check: review, rule: {kind: fields, where: {field: probability, present: true}, require: [probability_source]}}
+  - {id: FTA-06, text: every referenced safety mechanism exists in SM-CATALOG,                       clause: "26262-4:6.4.2", check: review, rule: {kind: refs, field: sm}}
+  - {id: FTA-07, text: the tree is complete — every credible cause of the top event is developed,    clause: "26262-9:8.4.3", check: review}
+  - {id: FTA-08, text: gate logic reflects the architecture, not the desired result,                 clause: "26262-9:8.4.3", check: review}

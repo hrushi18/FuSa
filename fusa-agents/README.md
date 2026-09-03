@@ -76,6 +76,7 @@ are also settable live in the dashboard (**⚙ LLM**), or once in a gitignored `
 | Authoring without a model | `--author deterministic` (or `FUSA_AUTHOR=deterministic`) renders a work product from engineer-authored tables where a `generator:` is declared. Every enabled authoring agent has one: `hazards.csv` → HARA (ASIL by S×E×C lookup), + `safety-goals.csv`/`assumptions.csv` → SADS, + `technical-requirements.csv` → TSR, `safety-mechanisms.csv` → SM-CATALOG, + `allocation.csv` → TSC (Mermaid view drawn from the same rows), + `hardware-requirements.csv` → HSR, + `hardware-design.csv` → HW-DESIGN, `fmeda-failure-modes.csv` → HW-FMEDA (over the same parse the metrics tool uses), `failure-modes.csv` → SYS-FMEA, `assets.csv`/`threat-scenarios.csv` → TARA (risk from the house matrix). Judgement stays with the engineer, in a file that is diffable and reviewable; anything not decided is `[PENDING: … <- project]`, never a plausible default. Agents with no generator still use the model |
 | Derived, not restated | a generated TSR inherits `asil` and `safe_state` from its parent goal and assembles its sentence from the method's own pattern; a TSC item reads `ftti` through the requirement to that goal, so the time-budget check compares the allocation against the goal that set it. A goal with no requirement, or a requirement with no allocation, is reported rather than left silent |
 | Review without a model | `--reviewer rules` (or `FUSA_REVIEWER=rules`) executes the checklist instead of reading it to an LLM: 22 of the 34 judgement items carry a `rule:` and are decided deterministically; the rest become `minor` findings naming the clause, so the confirmation review a person owes (26262-8 §9) is visible rather than implied |
+| Checklists compose | a checklist may declare `extends: generic` to inherit the house-wide items (open points, clause citation) instead of restating them; a locally redefined id wins, and inheritance is opt-in |
 | Feedback loop | a reviewer finding with `returns_to: <agent>` puts that upstream work product into `REWORK` — and a generated FMEA fires the same loop from a fact, not an opinion: a failure mode with a violated safety goal and no `sm` is flagged `finding: uncovered` and returns to `sys-tsc` |
 
 ## V-cycle coverage — four kinds of building block
@@ -146,6 +147,6 @@ S/E/C, ASIL) → Safety Goals (SADS `SG-nnn`, parents in HARA) → FSR (SYS-REQ)
 SM-CATALOG, HSR, HW-DESIGN) → Verification (scans + independent review) → Safety Validation (report).
 The remaining agents are declared with `enabled: false` so the plan, the PENDING owners and the coverage
 graph are already complete. `_clause-register/*.yaml` ships clause ids and topic labels only — fill `text`
-from your licensed copy of the standard. FTA and DFA method files are placeholders.
+from your licensed copy of the standard.
 
 Sample inputs describe a fictional SEooC (a brake-pressure sensor module) so the chain runs out of the box.

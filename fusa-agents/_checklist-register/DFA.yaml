@@ -1,0 +1,11 @@
+work_product: DFA
+extends: generic          # front matter, id convention, open points, clause citation
+items:
+  - {id: DFA-01, text: every item is an independence claim naming both sides,                        clause: "26262-9:7.4.1", check: review, rule: {kind: fields, where: {field: claim, present: true}, require: [claim, elements]}}
+  - {id: DFA-02, text: every applicable coupling factor states its category, initiator and effect,   clause: "26262-9:7.4.2", check: review, rule: {kind: fields, where: {field: coupling_factor, present: true}, require: [category, initiator, effect]}}
+  - {id: DFA-03, text: category is common_cause or cascading,                                        clause: "26262-9:7.4.2", check: review, rule: {kind: field_in, field: category, values: [common_cause, cascading]}}
+  - {id: DFA-04, text: every coupling factor reaches a verdict,                                      clause: "26262-9:7.4.3", check: review, rule: {kind: field_in, field: verdict, values: [mitigated, open]}}
+  - {id: DFA-05, text: a mitigated coupling factor names the measure that breaks it,                 clause: "26262-9:7.4.3", check: review, rule: {kind: fields, where: {field: verdict, is: mitigated}, require: [measure]}}
+  - {id: DFA-06, text: an open coupling factor is a finding routed to the design owner,              clause: "26262-9:7.4.4", check: review, rule: {kind: fields, where: {field: verdict, is: open}, require: [finding, returns_to]}}
+  - {id: DFA-07, text: every referenced safety mechanism exists in SM-CATALOG,                       clause: "26262-4:6.4.2", check: review, rule: {kind: refs, field: sm}}
+  - {id: DFA-08, text: the coupling-factor walk is complete — factors ruled out are recorded with a reason, clause: "26262-9:7.4.2", check: review}
