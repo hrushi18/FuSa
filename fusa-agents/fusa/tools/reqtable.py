@@ -37,7 +37,9 @@ class Column:
 
 
 COLUMNS = [
-    Column("Requirement ID", "Unique id in PREFIX-nnn form (e.g. SR-001); becomes the item id in SYS-REQ.", "General"),
+    Column("Requirement ID", "Unique id in PREFIX-nnn form (e.g. SR-001); becomes the item id in SYS-REQ. "
+           "Leave blank — the template fills SR-nnn in as you type a row, and the import "
+           "auto-assigns any id still missing.", "General"),
     Column("Requirement Text", "The requirement itself, one testable 'shall' statement.", "General", field="text"),
     Column("Requirement Type", "Functional / Non-functional / Interface / …", "General", field="type"),
     Column("FuSa Relevant?", "YES routes the row into the safety lifecycle; NO rows are kept but not imported.", "HARA", allowed=YESNO),
@@ -91,6 +93,11 @@ def build_template() -> Workbook:
         cell.font = Font(bold=True)
         cell.fill = PatternFill("solid", fgColor="DDE7F2")
     ws.append(EXAMPLE_ROW)
+    # Requirement IDs create themselves: as soon as a row has content, column A shows the
+    # next SR-nnn. The import assigns ids server-side too, so a blank column A never blocks.
+    last = ws.cell(row=1, column=len(COLUMNS)).column_letter
+    for row in range(3, 501):
+        ws.cell(row=row, column=1).value = f'=IF(COUNTA(B{row}:{last}{row})=0,"","SR-"&TEXT(ROW()-1,"000"))'
     for idx, c in enumerate(COLUMNS, 1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = max(16, min(len(c.name) + 4, 34))
         if c.allowed:
@@ -139,6 +146,52 @@ def parse(source) -> list[dict]:
     return rows
 
 
+def normalise_ids(rows: list[dict], prefix: str | None = None) -> list[str]:
+    """Canonicalise, assign and de-duplicate Requirement IDs in place; returns notes.
+
+    The same id rules `ids.normalise_items` applies to authored work products, applied at the
+    spreadsheet boundary: `sr-1` becomes `SR-001`, a blank cell is filled, a repeat is renumbered.
+    An id is never a reason to reject an upload — the sheet is data entry, not a grammar exam.
+
+    Deterministic: adopts the prefix of the first usable id (else SR) and numbers above the
+    highest already held by that prefix, in sheet-row order, so nothing collides.
+    """
+    canon = [ids.canonical(r.get("Requirement ID", "")) for r in rows]
+    if prefix is None:
+        prefix = next((c.rsplit("-", 1)[0] for c in canon if c), "SR")
+    n = max((int(c.rsplit("-", 1)[1]) for c in canon if c and c.rsplit("-", 1)[0] == prefix), default=0)
+
+    notes, seen = [], set()
+    for rec, new in zip(rows, canon):
+        raw = rec.get("Requirement ID", "")
+        why = None
+        if new is None:
+            why = "assigned" if not raw else f"'{raw}' is not an id"
+        elif new in seen:
+            why, new = f"'{new}' used twice", None
+        if new is None:
+            n += 1
+            new = f"{prefix}-{n:03d}"
+            notes.append(f"row {rec.get('_row', '?')}: {why} → {new}")
+        elif new != raw:
+            notes.append(f"row {rec.get('_row', '?')}: '{raw}' → {new} (spelling normalised)")
+        seen.add(new)
+        rec["Requirement ID"] = new
+    return notes
+
+
+def apply_ids(body: bytes, rows: list[dict]) -> bytes:
+    """Write the (assigned) Requirement IDs back into the workbook so the saved
+    input file carries them permanently — later parses see them as manual ids."""
+    wb = load_workbook(io.BytesIO(body), data_only=True)
+    ws = wb["Requirements"] if "Requirements" in wb.sheetnames else wb.active
+    for rec in rows:
+        ws.cell(row=rec["_row"], column=1).value = rec["Requirement ID"]
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _parse_dc(raw: str) -> float:
     v = float(raw.rstrip("%").strip())
     if raw.strip().endswith("%"):
@@ -150,10 +203,7 @@ def validate_row(rec: dict) -> list[str]:
     rid = rec.get("Requirement ID", "")
     label = rid or f"row {rec.get('_row', '?')}"
     errors = []
-    if not rid:
-        errors.append(f"{label}: Requirement ID is empty")
-    elif not ids.ID_RE.fullmatch(rid):
-        errors.append(f"{label}: Requirement ID must match PREFIX-nnn (e.g. SR-001)")
+    # Ids are not validated here: normalise_ids() has already made them canonical and unique.
     for c in COLUMNS:
         v = rec.get(c.name, "")
         if c.allowed and v and v not in c.allowed:
@@ -173,16 +223,8 @@ def validate_row(rec: dict) -> list[str]:
 
 
 def validate_rows(rows: list[dict]) -> list[str]:
-    errors = []
-    seen: dict[str, int] = {}
-    for rec in rows:
-        errors += validate_row(rec)
-        rid = rec.get("Requirement ID", "")
-        if rid:
-            if rid in seen:
-                errors.append(f"{rid}: duplicate Requirement ID (rows {seen[rid]} and {rec['_row']})")
-            seen.setdefault(rid, rec["_row"])
-    return errors
+    """Content errors only — an id problem is repaired by normalise_ids(), never reported here."""
+    return [e for rec in rows for e in validate_row(rec)]
 
 
 # ---- SYS-REQ work product ---------------------------------------------------
@@ -276,3 +318,29 @@ def template_bytes() -> bytes:
     buf = io.BytesIO()
     build_template().save(buf)
     return buf.getvalue()
+
+
+# ---- FMEDA input template ---------------------------------------------------
+
+FMEDA_COLUMNS = ["element", "mode", "lam_fit", "category", "dc", "safety_mechanism"]
+FMEDA_EXAMPLE = [
+    ["sense IC", "stuck-at output", "8.0", "SR", "0.99", "SM-002"],
+    ["sense IC", "drift", "6.0", "SR", "0.90", "SM-002"],
+    ["supply", "overvoltage", "4.0", "SPF", "0.0", ""],
+    ["Vref", "drift", "2.0", "MPF", "0.99", "SM-003"],
+    ["housing", "mechanical wear", "1.0", "SAFE", "0.0", ""],
+]
+
+
+def fmeda_template_text() -> str:
+    """The failure-mode CSV the metrics tool reads (SPFM / LFM / PMHF).
+
+    category: SR (safety-related, split by dc) | MPF | SPF | RF | MPF_L | MPF_D | MPF_P | SAFE
+    dc:       diagnostic coverage as a fraction, 0..1 (not a percentage)
+    """
+    from .metrics import CATEGORIES
+    header = (f"# category: {' | '.join(sorted(CATEGORIES))}\n"
+              "# dc: diagnostic coverage 0..1 (fraction, not %)\n"
+              "# lam_fit: failure rate in FIT (failures per 1e9 h)\n")
+    lines = [",".join(FMEDA_COLUMNS)] + [",".join(r) for r in FMEDA_EXAMPLE]
+    return header + "\n".join(lines) + "\n"

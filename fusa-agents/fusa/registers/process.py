@@ -14,9 +14,23 @@ class ProcessRegister:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._rec: dict[str, WorkProductRecord] = {}
+        self.load_warning: str | None = None
         if self.path.exists():
+            self._load()
+
+    def _load(self) -> None:
+        """A half-written status board must not brick every command. It is derived state — the
+        work products themselves are the record — so a damaged file is set aside, not repaired."""
+        try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             self._rec = {k: WorkProductRecord.model_validate(v) for k, v in raw.items()}
+        except Exception as e:
+            spoiled = self.path.with_suffix(".corrupt.json")
+            self.path.replace(spoiled)
+            self._rec = {}
+            self.load_warning = (f"{self.path.name} was unreadable ({type(e).__name__}: {str(e)[:80]}) — "
+                                 f"moved to {spoiled.name} and started a fresh board; "
+                                 "re-run agents or `fusa gate <WP>` to rebuild status")
 
     def save(self) -> None:
         self.path.write_text(json.dumps({k: v.model_dump(mode="json") for k, v in self._rec.items()}, indent=2), encoding="utf-8")

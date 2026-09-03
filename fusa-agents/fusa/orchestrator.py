@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import difflib
 from pathlib import Path
 
 from . import config
@@ -16,6 +17,10 @@ from .models import AgentSpec, Status
 from .registers import Registers
 
 READY_FOR_DOWNSTREAM = {Status.GATE_PASSED, Status.REVIEWED}
+
+
+class UnknownAgent(LookupError):
+    """No such runnable agent id — a typo, a disabled row, or the reviewer."""
 
 
 class Orchestrator:
@@ -35,6 +40,33 @@ class Orchestrator:
         producing = [s for s in self.specs if s.kind in ("authoring", "runner") and s.enabled]
         return self.reg.process.dependency_sequence(producing)
 
+    def resolve(self, agent_id: str):
+        """(spec, agent) for a runnable agent id. A typo and a disabled agent are both ordinary
+        mistakes, so they get an explanation instead of the KeyError they used to raise."""
+        if agent_id not in self.by_id:
+            close = difflib.get_close_matches(agent_id, self.by_id, n=3)
+            raise UnknownAgent(f"unknown agent '{agent_id}'"
+                               + (f" — did you mean {', '.join(close)}?" if close else "")
+                               + f" ({len(self.by_id)} declared in config/agents.yaml)")
+        spec = self.by_id[agent_id]
+        if agent_id not in self.agents:
+            why = "kind 'review' is not run directly" if spec.kind == "review" else \
+                  "it is declared with `enabled: false` in config/agents.yaml"
+            raise UnknownAgent(f"agent '{agent_id}' cannot be run: {why}")
+        return spec, self.agents[agent_id]
+
+    def spec_for(self, wp: str) -> AgentSpec:
+        """The declared spec, or one synthesised for an imported work product (SYS-REQ via Excel
+        or ReqIF has no agent). Nothing owns its prefix rule, so the ids present define it —
+        gating an import checks structure and traceability without inventing a convention."""
+        if wp in self.by_wp:
+            return self.by_wp[wp]
+        if not self.reg.generated.exists(wp):
+            raise KeyError(wp)
+        found = sorted({i.prefix for i in self.reg.generated.items(wp)})
+        return AgentSpec(id=f"{wp.lower()}-import", work_product=wp, title=f"{wp} (imported)",
+                         phase=1, item_prefixes=found or None, reviewed_by=None)
+
     def gating(self, spec: AgentSpec) -> list[str]:
         """Why this agent may not start yet (empty = go)."""
         reasons = []
@@ -52,8 +84,7 @@ class Orchestrator:
 
     # ---- execution ---------------------------------------------------------
     def run(self, agent_id: str, *, force: bool = False, review: bool = True, log=print) -> Status:
-        spec = self.by_id[agent_id]
-        agent = self.agents[agent_id]
+        spec, agent = self.resolve(agent_id)
         wp = spec.work_product
         proc = self.reg.process
 
@@ -68,11 +99,16 @@ class Orchestrator:
         path = self.reg.generated.write(wp, content)
         proc.update(wp, agent_id, status=Status.DRAFTED, path=str(path))
 
+        # deterministic id pass already rewrote what the model got wrong; say what changed
+        notes = list(getattr(agent, "last_notes", ()))
+        for n in notes:
+            log(f"[{agent_id}]   id fixed     {n}")
+
         # deterministic tools declared for this agent (e.g. metrics for hw-fmeda)
         for tool in spec.tools:
             self._run_tool(tool, spec, log)
 
-        gate = run_gate(spec, content, self.reg.generated)
+        gate = run_gate(spec, content, self.reg.generated, extra_warnings=notes)
         proc.update(wp, agent_id, gate=gate, pending_count=len(gate.pending),
                     status=Status.GATE_PASSED if gate.passed else Status.GATE_FAILED)
         for e in gate.errors:

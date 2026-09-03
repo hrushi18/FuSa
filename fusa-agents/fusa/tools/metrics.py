@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+FMEDA_HEADER = ["element", "mode", "lam_fit", "category", "dc", "safety_mechanism"]
+
 SPLIT_CATEGORIES = {"SR", "MPF"}
 FINAL_CATEGORIES = {"SPF", "RF", "MPF_L", "MPF_D", "MPF_P", "SAFE"}
 CATEGORIES = SPLIT_CATEGORIES | FINAL_CATEGORIES
@@ -104,16 +106,38 @@ def compute(rows: Iterable[FailureMode]) -> Metrics:
     return Metrics(lam_sr, s["SPF"], s["RF"], s["MPF_L"], s["MPF_D"], s["MPF_P"], s["SAFE"], spfm, lfm, pmhf)
 
 
+def uncommented(lines: Iterable[str]) -> Iterable[str]:
+    """Drop `#` comment and blank lines so a self-documenting template still parses."""
+    return (l for l in lines if l.strip() and not l.lstrip().startswith("#"))
+
+
+REQUIRED_COLUMNS = ["element", "mode", "lam_fit", "category"]
+
+
 def load_csv(path: str | Path) -> list[FailureMode]:
+    """Failure modes from a CSV. A wrong or missing column names itself instead of raising
+    KeyError somewhere in the middle of the file."""
     rows: list[FailureMode] = []
     with open(path, newline="", encoding="utf-8") as f:
-        for rec in csv.DictReader(f):
-            rows.append(FailureMode(
-                element=rec["element"], mode=rec["mode"], lam=float(rec["lam_fit"]),
-                category=rec["category"].strip().upper(),
-                dc=float(rec.get("dc") or 0.0),
-                safety_mechanism=rec.get("safety_mechanism", ""),
-            ))
+        reader = csv.DictReader(uncommented(f))
+        header = [h.strip() for h in (reader.fieldnames or [])]
+        missing = [c for c in REQUIRED_COLUMNS if c not in header]
+        if missing:
+            raise ValueError(f"{Path(path).name}: missing column(s) {', '.join(missing)}; "
+                             f"found {', '.join(header) or '(no header row)'} — "
+                             f"expected {', '.join(FMEDA_HEADER)}")
+        for n, rec in enumerate(reader, start=2):
+            try:
+                rows.append(FailureMode(
+                    element=(rec.get("element") or "").strip(), mode=(rec.get("mode") or "").strip(),
+                    lam=float(rec["lam_fit"]), category=(rec["category"] or "").strip().upper(),
+                    dc=float(rec.get("dc") or 0.0),
+                    safety_mechanism=(rec.get("safety_mechanism") or "").strip(),
+                ))
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"{Path(path).name} row {n}: {e}") from None
+    if not rows:
+        raise ValueError(f"{Path(path).name}: no data rows")
     return rows
 
 

@@ -82,6 +82,10 @@
           color: var(--dim); cursor: pointer; margin: 8px 0 16px; }
   .drop.hover, .drop:hover { border-color: var(--accent); color: var(--text); }
   h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 18px 0 6px; }
+  input[type=text], input[type=password], select {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; font: inherit; width: 100%; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
   table { border-collapse: collapse; font-size: 12px; }
   td, th { border: 1px solid var(--line); padding: 4px 9px; text-align: left; }
 </style>
@@ -93,6 +97,8 @@
   <span id="model" class="badge">…</span>
   <span id="verdict" class="badge" title="release validation — click for blockers">…</span>
   <span class="spacer"></span>
+  <button id="settings" title="LLM backend: provider, model, API key">⚙ LLM</button>
+  <button id="templates" title="Download a blank input template">⬇ Templates</button>
   <button id="inputs">⬆ Inputs</button>
   <button id="report">Validation report</button>
   <button id="reportx" title="Excel results workbook">⬇ Excel report</button>
@@ -127,8 +133,48 @@ async function loadMeta(){
   const m = await api("/api/meta");
   $("#mode").textContent = m.dry_run ? "DRY RUN — no model calls" : "LIVE";
   $("#mode").className = "badge " + (m.dry_run ? "dry" : "live");
-  $("#model").textContent = m.model;
+  $("#model").textContent = m.provider + " · " + m.model;
 }
+
+$("#settings").onclick = async () => {
+  const s = await api("/api/settings");
+  $("#d-title").textContent = "LLM backend";
+  $("#d-body").innerHTML = `
+    <div class="kv">Backend used by the authoring and review agents. The API key is held in server
+      memory only — it is never written to disk, and never sent back to the browser. It can also come
+      from the environment: ${Object.entries(s.providers).map(([k,p]) => `${k}: ${p.key_env.join(" / ")}`).join(" · ")}.</div>
+    <h3>Provider</h3>
+    <select id="s-provider">${Object.entries(s.providers).map(([k,p]) =>
+      `<option value="${k}" ${k===s.provider?"selected":""}>${esc(p.label)}</option>`).join("")}</select>
+    <h3>Model</h3>
+    <input type="text" id="s-model" value="${esc(s.model)}" spellcheck="false">
+    <h3>API key ${s.api_key_set ? '<span style="color:var(--c-reviewed)">· configured ✓</span>' : '<span style="color:var(--c-blocked)">· not set</span>'}</h3>
+    <input type="password" id="s-key" placeholder="${s.api_key_set ? "leave blank to keep the current key" : "sk-ant-… / xai-… / gsk_… / sk-… (OpenAI) / AIza… (Gemini)"}">
+    <div style="display:flex; gap:10px; margin-top:14px">
+      <button id="s-save" class="primary">Save</button>
+      <button id="s-test">Test connection</button>
+    </div>
+    <div id="s-out" class="kv" style="margin-top:10px"></div>`;
+  $("#s-provider").onchange = () =>
+    $("#s-model").value = s.providers[$("#s-provider").value].default_model;
+  $("#s-save").onclick = async () => {
+    try {
+      const r = await api("/api/settings", {method:"POST", headers:{"content-type":"application/json"},
+        body: JSON.stringify({provider: $("#s-provider").value, model: $("#s-model").value,
+                              api_key: $("#s-key").value})});
+      $("#s-key").value = "";
+      $("#s-out").textContent = `saved — ${r.provider} · ${r.model}` + (r.api_key_set ? " · key configured" : " · no key yet");
+      loadMeta();
+    } catch(e){ $("#s-out").textContent = "rejected — " + (e.detail || "error"); }
+  };
+  $("#s-test").onclick = async () => {
+    $("#s-out").textContent = "testing…";
+    const r = await api("/api/settings/test", {method:"POST"});
+    $("#s-out").textContent = r.ok ? ("✓ backend reachable" + (r.note ? " — " + r.note : ` — replied “${r.reply}”`))
+                                   : "✗ " + r.error;
+  };
+  $("#drawer").classList.add("open");
+};
 
 let lastReport = null;
 async function loadVerdict(){
@@ -148,6 +194,28 @@ $("#verdict").onclick = () => {
     : `<p class="kv">All work products reviewed, gates passed, no pending markers, metric targets met.</p>`;
   $("#drawer").classList.add("open");
 };
+$("#templates").onclick = () => {
+  $("#d-title").textContent = "Input templates";
+  $("#d-body").innerHTML = `
+    <div class="kv">Blank templates for the two files the chain takes as input. Fill one in and drop it
+      on ⬆ Inputs — it is validated, saved to input/ and the chain re-runs.</div>
+    <h3>Safety requirements (.xlsx)</h3>
+    <div class="kv">23 columns across the lifecycle, with a Description sheet and dropdowns.
+      Requirement IDs fill themselves in as you type a row, and any left blank or misspelt
+      (<code>sr-1</code>) are made canonical on import — an id never rejects the upload.</div>
+    <a href="/api/template/requirements"><button class="primary" style="width:100%;margin-top:6px">
+      ⬇ safety-requirements-template.xlsx</button></a>
+    <h3>FMEDA failure modes (.csv)</h3>
+    <div class="kv">element, mode, lam_fit, category (SPF/MPF/S/RF), dc, safety_mechanism —
+      the input the metrics tool reads for SPFM / LFM / PMHF.</div>
+    <a href="/api/template/fmeda"><button style="width:100%;margin-top:6px">
+      ⬇ fmeda-failure-modes-template.csv</button></a>
+    <h3>Command line</h3>
+    <pre>python -m fusa template                 # requirements .xlsx
+python -m fusa template --kind fmeda    # failure modes .csv</pre>`;
+  $("#drawer").classList.add("open");
+};
+
 $("#inputs").onclick = async () => {
   $("#d-title").textContent = "Inputs";
   let files = [];
@@ -155,7 +223,7 @@ $("#inputs").onclick = async () => {
   $("#d-body").innerHTML = `
     <a href="/api/template/requirements"><button style="width:100%">⬇ Download safety-requirements template (.xlsx)</button></a>
     <div class="drop" id="drop">⬆ drop your file here, or click to choose<br>
-      <span class="kv">.xlsx — filled safety-requirements template (23 columns, see its Description sheet)<br>
+      <span class="kv">.xlsx — filled safety-requirements template (23 columns, see its Description sheet; Requirement IDs may be left blank — they are auto-assigned)<br>
       .csv — FMEDA failure modes (element, mode, lam_fit, category, dc, safety_mechanism)<br>
       the file is validated, saved to input/, and the whole chain runs automatically</span></div>
     <input type="file" id="csvfile" accept=".csv,.xlsx,text/csv" style="display:none">
@@ -179,6 +247,7 @@ async function uploadCsv(file){
   try {
     const r = await api(url, {method:"POST", body: file, headers: {"content-type": type}});
     logLine(`[ui] saved ${r.saved} (${r.rows} rows${r.fusa_relevant !== undefined ? `, ${r.fusa_relevant} FuSa-relevant -> SYS-REQ` : ""}) — chain started`);
+    (r.id_notes || []).forEach(n => logLine("[ui]   id fixed     " + n));
     $("#drawer").classList.remove("open");
   } catch(e){
     (Array.isArray(e.detail) ? e.detail : [e.detail || "upload failed"])

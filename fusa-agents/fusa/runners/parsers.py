@@ -20,9 +20,19 @@ class ToolFinding:
     tags: list[str] = field(default_factory=list)   # e.g. CWE-121, MISRA-C:2012 Rule 17.7, security
 
 
+class ReportUnreadable(ValueError):
+    """The analyser produced a file we cannot parse — usually because it crashed mid-write.
+    Treated like a missing report (a PENDING marker), never as zero findings."""
+
+
 def parse_sarif(path: Path) -> list[ToolFinding]:
     """SARIF 2.1.0 — emitted by CodeQL, Semgrep, clang-tidy (via converters), PC-lint Plus, Coverity, etc."""
-    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (ValueError, OSError, UnicodeDecodeError) as e:
+        raise ReportUnreadable(f"{Path(path).name} is not readable SARIF: {e}") from None
+    if not isinstance(doc, dict):
+        raise ReportUnreadable(f"{Path(path).name}: SARIF root must be an object, got {type(doc).__name__}")
     out: list[ToolFinding] = []
     for run in doc.get("runs", []):
         tool = run.get("tool", {}).get("driver", {})
@@ -43,7 +53,10 @@ def parse_sarif(path: Path) -> list[ToolFinding]:
 
 def parse_cppcheck_xml(path: Path) -> list[ToolFinding]:
     """cppcheck --xml --xml-version=2 output (also carries MISRA addon results as rule ids)."""
-    root = ET.parse(path).getroot()
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as e:
+        raise ReportUnreadable(f"{Path(path).name} is not readable cppcheck XML: {e}") from None
     out: list[ToolFinding] = []
     for e in root.iter("error"):
         loc = e.find("location")

@@ -1,11 +1,14 @@
 """Typed records shared across registers, agents, gate and orchestrator."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+PREFIX_RE = re.compile(r"\A[A-Z][A-Z0-9]{1,7}\Z")     # must match ids.ID_RE's prefix group
 
 
 class Status(str, Enum):
@@ -40,7 +43,13 @@ class AgentSpec(BaseModel):
 
     @property
     def prefixes(self) -> list[str]:
-        return self.item_prefixes or [self.work_product]
+        """Declared prefixes, else one derived from the work product — legal by construction.
+        `HW-DESIGN` as a prefix would be rejected by the id grammar, silently costing the work
+        product every traceable item, so the hyphen is dropped rather than passed through."""
+        if self.item_prefixes:
+            return self.item_prefixes
+        derived = re.sub(r"[^A-Z0-9]", "", self.work_product.upper())[:8]
+        return [derived if PREFIX_RE.match(derived) else "ITEM"]
 
 
 class Finding(BaseModel):

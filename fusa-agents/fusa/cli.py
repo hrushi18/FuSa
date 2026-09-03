@@ -23,7 +23,9 @@ def main(argv: list[str] | None = None) -> int:
     ri = sub.add_parser("import-reqif", help="ReqIF -> work product"); ri.add_argument("file"); ri.add_argument("--work-product", required=True); ri.add_argument("--prefix", required=True); ri.add_argument("--id-attribute")
     re_ = sub.add_parser("export-reqif", help="work product -> ReqIF"); re_.add_argument("work_product"); re_.add_argument("--out")
     m = sub.add_parser("metrics", help="compute SPFM/LFM/PMHF from a failure-mode CSV"); m.add_argument("csv"); m.add_argument("--asil", default="B")
-    t = sub.add_parser("template", help="write the safety-requirements Excel template"); t.add_argument("--out", default="safety-requirements-template.xlsx")
+    t = sub.add_parser("template", help="write an input template (requirements .xlsx | fmeda .csv)")
+    t.add_argument("--kind", choices=["requirements", "fmeda"], default="requirements")
+    t.add_argument("--out", help="default: safety-requirements-template.xlsx / fmeda-failure-modes-template.csv")
     a = p.parse_args(argv)
 
     if a.cmd == "ui":
@@ -33,18 +35,50 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if a.cmd == "template":
+        from pathlib import Path
         from .tools import reqtable
-        print(reqtable.write_template(a.out))
+        if a.kind == "fmeda":
+            out = Path(a.out or "fmeda-failure-modes-template.csv")
+            out.write_text(reqtable.fmeda_template_text(), encoding="utf-8")
+            print(out)
+        else:
+            print(reqtable.write_template(a.out or "safety-requirements-template.xlsx"))
         return 0
 
     if a.cmd == "metrics":
         from .tools import metrics
-        print(metrics.render(metrics.compute(metrics.load_csv(a.csv)), a.asil.upper()))
+        try:
+            rows = metrics.load_csv(a.csv)
+        except (OSError, ValueError) as e:
+            print(f"fusa: {e}", file=sys.stderr)
+            return 2
+        print(metrics.render(metrics.compute(rows), a.asil.upper()))
         return 0
 
-    from .orchestrator import Orchestrator
+    from .agents.llm import LLMConfigError, LLMResponseError
+    from .orchestrator import Orchestrator, UnknownAgent
     orch = Orchestrator(dry_run=a.dry_run or None, strict_pending=a.strict or None)
+    if orch.reg.process.load_warning:
+        print(f"fusa: {orch.reg.process.load_warning}", file=sys.stderr)
+    try:
+        return _dispatch(a, orch)
+    except UnknownAgent as e:
+        print(f"fusa: {e}", file=sys.stderr)
+        runnable = ", ".join(sorted(orch.agents))
+        print(f"fusa: runnable now: {runnable}", file=sys.stderr)
+        return 2
+    except LLMResponseError as e:
+        print(f"fusa: {e}", file=sys.stderr)
+        return 3
+    except LLMConfigError as e:                      # setup problem: one line, not a stack trace
+        print(f"fusa: {e}", file=sys.stderr)
+        print(f"fusa: provider '{orch.llm.provider}', model '{orch.llm.model}' "
+              "(FUSA_PROVIDER / FUSA_MODEL; --dry-run needs no key)", file=sys.stderr)
+        print(f"fusa: or put the key in {config.ROOT / '.env'} — see .env.example", file=sys.stderr)
+        return 2
 
+
+def _dispatch(a, orch) -> int:
     if a.cmd == "plan":
         for i, s in enumerate(orch.plan(), 1):
             print(f"{i:2}. phase {s.phase}  {s.id:22} -> {s.work_product:12} requires {', '.join(s.requires) or '—'}")
@@ -67,7 +101,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if rep.verdict == "RELEASABLE" else 1
     elif a.cmd == "import-reqif":
         from .adapters import reqif
-        objs = reqif.parse(a.file)
+        try:
+            objs = reqif.parse(a.file)
+        except (OSError, ValueError) as e:
+            print(f"fusa: {e}", file=sys.stderr)
+            return 2
         content = reqif.to_work_product(objs, a.work_product, a.prefix, id_attribute=a.id_attribute,
                                         parent_ids={v: k for k, v in _reqif_index(orch).items()})
         path = orch.reg.generated.write(a.work_product, content)
@@ -80,7 +118,12 @@ def main(argv: list[str] | None = None) -> int:
         open(out, "w", encoding="utf-8").write(xml); print(out)
     elif a.cmd == "gate":
         from .gate import run_gate
-        spec = orch.by_wp[a.work_product]
+        try:
+            spec = orch.spec_for(a.work_product)
+        except KeyError:
+            known = ", ".join(sorted(set(orch.by_wp) | set(orch.reg.generated.all_work_products())))
+            print(f"fusa: no work product '{a.work_product}' — known: {known}", file=sys.stderr)
+            return 2
         res = run_gate(spec, orch.reg.generated.read(a.work_product), orch.reg.generated)
         print(res.model_dump_json(indent=2))
         return 0 if res.passed else 1

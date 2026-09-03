@@ -12,10 +12,12 @@ import json
 import re
 from datetime import date
 
+from pydantic import ValidationError
+
 from .. import config
-from ..models import AgentSpec, ReviewVerdict
+from ..models import AgentSpec, Finding, ReviewVerdict
 from ..registers import Registers, ConventionsView
-from ..tools import ids
+from ..tools import ids, modeljson
 from .llm import LLM
 
 PRINCIPLES = """\
@@ -50,6 +52,9 @@ class AuthoringAgent(Agent):
     def __init__(self, spec: AgentSpec, registers: Registers, llm: LLM):
         super().__init__(spec, llm)
         self.reg = registers
+        self._owners: dict[str, str] = {}                    # work product -> agent id
+        self._prefix_owners: dict[str, tuple[str, str]] = {}  # id prefix -> (work product, agent id)
+        self.last_notes: list[str] = []                      # what the deterministic id pass changed
 
     # ---- prompt assembly -------------------------------------------------
     def system_prompt(self) -> str:
@@ -71,6 +76,8 @@ class AuthoringAgent(Agent):
 
     def _output_contract(self) -> str:
         s = self.spec
+        foreign = ", ".join(f"{p}-nnn → {wp} (`{a}`)" for p, (wp, a) in sorted(self._prefix_owners.items())
+                            if p not in s.prefixes) or "—"
         return f"""## Output contract
 Return ONLY the work product as Markdown, starting with this front matter:
 ---
@@ -81,8 +88,16 @@ date: {date.today().isoformat()}
 clauses: {", ".join(s.clauses) or "—"}
 status: draft
 ---
-Then the content. Every identifiable item is a `### <PREFIX>-nnn` heading (allowed prefixes: {", ".join(s.prefixes)}) followed by `- key: value` bullets
-(see conventions). Use [PENDING: ... <- agent-id] for anything you cannot derive from the inputs given."""
+Then the content. Every identifiable item is a `### <PREFIX>-nnn` heading followed by `- key: value` bullets (see conventions).
+
+Ids are framework-owned — you write the content, not the bookkeeping:
+- Allowed prefixes in {s.work_product}: {", ".join(s.prefixes)}. No item may carry any other prefix.
+- Write the number as `nnn` (e.g. `### {s.prefixes[0]}-nnn`) and the framework assigns it deterministically.
+  Numbers you do write are re-padded and de-duplicated, so never renumber to "fix" anything.
+- Ids owned by other work products: {foreign}.
+  Content that belongs to one of those is written as prose or as [PENDING: ... <- owning-agent-id] —
+  never as a `###` item here. Giving it an id would claim a trace this work product cannot own.
+- Use [PENDING: ... <- agent-id] for anything you cannot derive from the inputs given."""
 
     def user_prompt(self) -> str:
         blocks = ["# Inputs available to you"]
@@ -110,6 +125,8 @@ Then the content. Every identifiable item is a `### <PREFIX>-nnn` heading (allow
         if not content.startswith("---"):
             fm = self._output_contract().split("---", 1)[1].split("---")[0]
             content = f"---{fm}---\n\n" + content
+        content, self.last_notes = ids.normalise_items(
+            content, self.spec.prefixes, self.work_product, self._prefix_owners)
         return content.rstrip() + "\n"
 
     def _dry_stub(self) -> str:
@@ -182,11 +199,26 @@ class ReviewAgent(Agent):
 
     def run(self, content: str) -> ReviewVerdict:
         raw = self.llm.complete(self.system_prompt(), self.user_prompt(content), stub=lambda: self._dry_stub(content))
-        raw = re.sub(r"^```(?:json)?\s*\n|\n```\s*$", "", raw.strip())
-        data = json.loads(raw)
-        data.setdefault("work_product", self.target.work_product)
-        data["reviewer"] = self.spec.id
-        return ReviewVerdict.model_validate(data)
+        data = modeljson.extract_object(raw)
+        if data is not None:
+            try:
+                return ReviewVerdict.model_validate(
+                    modeljson.coerce_verdict(data, self.target.work_product, self.spec.id))
+            except ValidationError:
+                pass
+        return self._unreadable(raw)
+
+    def _unreadable(self, raw: str) -> ReviewVerdict:
+        """A reply we cannot read is not an approval. Recorded as rework with the raw output
+        kept beside the work product, so one bad reply neither approves nor kills the chain."""
+        wp = self.target.work_product
+        self.generated.write_aux(wp, f"{wp}.review-raw.txt", raw or "(empty completion)")
+        return ReviewVerdict(
+            work_product=wp, verdict="rework", reviewer=self.spec.id,
+            findings=[Finding(id="F-PARSE", severity="blocker",
+                              description="reviewer reply could not be read as a verdict — "
+                                          f"raw output in {wp}.review-raw.txt: "
+                                          f"{(raw or '(empty completion)').strip()[:200]}")])
 
     def _dry_stub(self, content: str) -> str:
         n_pending = len(ids.find_pending(content))

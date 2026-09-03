@@ -106,21 +106,21 @@ agents:
     checklist: FMEA
     item_prefixes: [SFM]
 
-  - {id: sys-fta, work_product: SYS-FTA, title: System FTA, phase: 2, requires: [TSC], clauses: ["26262-4:7.4.3", "26262-9:8"], method: fta, conventions: [ids], checklist: generic, enabled: false}
-  - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
+  - {id: sys-fta, work_product: SYS-FTA, title: System FTA, phase: 2, requires: [TSC], clauses: ["26262-4:7.4.3", "26262-9:8"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [FTA]}
+  - {id: sys-dfa, work_product: SYS-DFA, title: System Dependent Failure Analysis, phase: 2, requires: [TSC], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [DFA]}
 
   # ── 3 · Hardware Level Analysis ───────────────────────────────────────────
-  - {id: hw-design, work_product: HW-DESIGN, title: Hardware Design Specification, phase: 3, requires: [HSR], clauses: ["26262-5:7"], method: requirements-authoring, conventions: [ids], checklist: generic}
-  - {id: hw-fmea,   work_product: HW-FMEA,   title: Hardware FMEA, phase: 3, requires: [HW-DESIGN, SM-CATALOG], clauses: ["26262-5:7.4.3"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false}
-  - {id: hw-fta,    work_product: HW-FTA,    title: Hardware FTA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-5:7.4.3"], method: fta, conventions: [ids], checklist: generic, enabled: false}
-  - {id: hw-dfa,    work_product: HW-DFA,    title: Hardware DFA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
+  - {id: hw-design, work_product: HW-DESIGN, title: Hardware Design Specification, phase: 3, requires: [HSR], clauses: ["26262-5:7"], method: requirements-authoring, conventions: [ids], checklist: generic, item_prefixes: [HWD]}
+  - {id: hw-fmea,   work_product: HW-FMEA,   title: Hardware FMEA, phase: 3, requires: [HW-DESIGN, SM-CATALOG], clauses: ["26262-5:7.4.3"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false, item_prefixes: [HFM]}
+  - {id: hw-fta,    work_product: HW-FTA,    title: Hardware FTA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-5:7.4.3"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [HFT]}
+  - {id: hw-dfa,    work_product: HW-DFA,    title: Hardware DFA, phase: 3, requires: [HW-DESIGN], clauses: ["26262-9:7"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [HDF]}
 
   # ── 4 · Software Level Analysis ───────────────────────────────────────────
-  - {id: sw-arch,  work_product: SW-ARCH,  title: Software Architectural Design, phase: 4, requires: [SSR], clauses: ["26262-6:7"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
-  - {id: sw-fmea,  work_product: SW-FMEA,  title: Software FMEA, phase: 4, requires: [SW-ARCH, SM-CATALOG], clauses: ["26262-6:7.4.10"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false}
-  - {id: sw-fta,   work_product: SW-FTA,   title: Software FTA, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:7.4.10"], method: fta, conventions: [ids], checklist: generic, enabled: false}
-  - {id: sw-dfa,   work_product: SW-DFA,   title: Software DFA, phase: 4, requires: [SW-ARCH], clauses: ["26262-9:7", "26262-6:7.4.11"], method: dfa, conventions: [ids], checklist: generic, enabled: false}
-  - {id: sw-calib, work_product: SW-CALIB, title: Calibration Data Safety Analysis, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:Annex C"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+  - {id: sw-arch,  work_product: SW-ARCH,  title: Software Architectural Design, phase: 4, requires: [SSR], clauses: ["26262-6:7"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [SWA]}
+  - {id: sw-fmea,  work_product: SW-FMEA,  title: Software FMEA, phase: 4, requires: [SW-ARCH, SM-CATALOG], clauses: ["26262-6:7.4.10"], method: fmea, conventions: [ids], checklist: FMEA, enabled: false, item_prefixes: [SWF]}
+  - {id: sw-fta,   work_product: SW-FTA,   title: Software FTA, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:7.4.10"], method: fta, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [SWT]}
+  - {id: sw-dfa,   work_product: SW-DFA,   title: Software DFA, phase: 4, requires: [SW-ARCH], clauses: ["26262-9:7", "26262-6:7.4.11"], method: dfa, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [SWD]}
+  - {id: sw-calib, work_product: SW-CALIB, title: Calibration Data Safety Analysis, phase: 4, requires: [SW-ARCH], clauses: ["26262-6:Annex C"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [CAL]}
 
   # ── 5 · Quantitative Analysis ─────────────────────────────────────────────
   - id: hw-fmeda
@@ -137,12 +137,12 @@ agents:
     tools: [metrics]                  # SPFM/LFM/PMHF computed by fusa.tools.metrics, never by the model
 
   # ── 6 · Safety Solution & Deliverables ────────────────────────────────────
-  - {id: tsc-close-the-loop,  work_product: TSC-CLOSURE,   title: TSC close-the-loop (analysis findings back into the concept), phase: 6, requires: [TSC, SYS-FMEA], clauses: ["26262-4:6", "26262-9:8.4.9"], method: safety-concept, conventions: [ids], checklist: generic, enabled: false}
-  - {id: safety-manual-aou,   work_product: SAFETY-MANUAL, title: SEooC Safety Manual and Assumptions of Use, phase: 6, requires: [SADS, TSC, SM-CATALOG], clauses: ["26262-10:9"], method: seooc-assumptions, conventions: [ids, document-structure], checklist: generic, enabled: false}
+  - {id: tsc-close-the-loop,  work_product: TSC-CLOSURE,   title: TSC close-the-loop (analysis findings back into the concept), phase: 6, requires: [TSC, SYS-FMEA], clauses: ["26262-4:6", "26262-9:8.4.9"], method: safety-concept, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [TCL]}
+  - {id: safety-manual-aou,   work_product: SAFETY-MANUAL, title: SEooC Safety Manual and Assumptions of Use, phase: 6, requires: [SADS, TSC, SM-CATALOG], clauses: ["26262-10:9"], method: seooc-assumptions, conventions: [ids, document-structure], checklist: generic, enabled: false, item_prefixes: [SMN]}
 
   # ── 7 · Verification & Validation ─────────────────────────────────────────
-  - {id: test-spec-agent,    work_product: TEST-SPEC,    title: Safety Test Specification (incl. fault injection), phase: 7, requires: [TSR, TSC], clauses: ["26262-4:7.4.4", "26262-8:9"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
-  - {id: traceability-agent, work_product: TRACEABILITY, title: Traceability Matrix (derived from identifiers, not maintained by hand), phase: 7, requires: [TSR, TSC], clauses: ["26262-8:6.4.3"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false}
+  - {id: test-spec-agent,    work_product: TEST-SPEC,    title: Safety Test Specification (incl. fault injection), phase: 7, requires: [TSR, TSC], clauses: ["26262-4:7.4.4", "26262-8:9"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [TSP]}
+  - {id: traceability-agent, work_product: TRACEABILITY, title: Traceability Matrix (derived from identifiers, not maintained by hand), phase: 7, requires: [TSR, TSC], clauses: ["26262-8:6.4.3"], method: requirements-authoring, conventions: [ids], checklist: generic, enabled: false, item_prefixes: [TRC]}
 
   # ── V-cycle extension: cybersecurity (ISO/SAE 21434) ─────────────────────
   # Same registers, same gate, same reviewer; only the clause register and method differ.

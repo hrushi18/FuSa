@@ -19,7 +19,7 @@ from pathlib import Path
 from .. import config
 from ..models import AgentSpec
 from ..registers import Registers
-from .parsers import PARSERS, SEVERITY_ORDER, ToolFinding
+from .parsers import PARSERS, SEVERITY_ORDER, ReportUnreadable, ToolFinding
 
 
 class ToolRunnerAgent:
@@ -47,9 +47,16 @@ class ToolRunnerAgent:
             subprocess.run(cmd.format(report=report), shell=True, cwd=config.ROOT / self.cfg.get("cwd", "."), check=False)
         if not report.exists():
             return self._render([], pending=f"report {self.cfg['report']} not produced <- {self.spec.id}")
-        findings = PARSERS[self.cfg.get("format", "sarif")](report)
-        floor = SEVERITY_ORDER[self.cfg.get("min_severity", "info")]
-        findings = [f for f in findings if SEVERITY_ORDER[f.severity] >= floor]
+        fmt = self.cfg.get("format", "sarif")
+        if fmt not in PARSERS:
+            return self._render([], pending=f"unknown report format '{fmt}' (have: {', '.join(PARSERS)}) "
+                                            f"<- {self.spec.id}")
+        try:
+            findings = PARSERS[fmt](report)
+        except ReportUnreadable as e:      # a crashed analyser must not read as a clean scan
+            return self._render([], pending=f"{e} <- {self.spec.id}")
+        floor = SEVERITY_ORDER.get(self.cfg.get("min_severity", "info"), 0)
+        findings = [f for f in findings if SEVERITY_ORDER.get(f.severity, 1) >= floor]
         return self._render(findings)
 
     def route(self, f: ToolFinding) -> str | None:

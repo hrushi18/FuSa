@@ -7,3 +7,8 @@
 - `sm:` lists safety mechanisms by id only (`SM-001, SM-004`). Never describe a mechanism outside SM-CATALOG.
 - Ids are never reused, renumbered or reassigned. Deleted items keep their id with `- status: withdrawn`.
 - Missing inputs: `[PENDING: <what is missing> <- <agent-id>]` — never a guess.
+- **Numbers are assigned by the framework, not by the author.** Write `### <PREFIX>-nnn`; the id pass
+  fills the number in, pads it to three digits and resolves duplicates before the gate runs.
+- A prefix belongs to exactly one work product. An item whose prefix is owned elsewhere is demoted to a
+  `####` commentary block naming its owner — the text stays, the false trace does not. Such a block is
+  correct output, not a review finding; the missing item is raised in the owning work product instead.

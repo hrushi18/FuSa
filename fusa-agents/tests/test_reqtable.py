@@ -57,6 +57,42 @@ def test_template_has_requirements_and_description_sheets(tmp_path):
     assert "ASIL" in desc_first_col and "Safe State" in desc_first_col
 
 
+def test_template_prefills_id_formula(tmp_path):
+    from fusa.tools import reqtable
+    path = tmp_path / "t.xlsx"
+    reqtable.write_template(path)
+    a3 = load_workbook(path)["Requirements"]["A3"].value
+    assert a3.startswith("=IF(") and '"SR-"' in a3          # ids create themselves as rows are typed
+
+
+# ---- auto-assigned ids ------------------------------------------------------
+
+def test_blank_ids_are_filled_in_row_order():
+    from fusa.tools import reqtable
+    rows = reqtable.parse(io.BytesIO(make_upload([GOOD_ROW | {"Requirement ID": ""},
+                                                  NON_FUSA_ROW | {"Requirement ID": ""}])))
+    assert reqtable.normalise_ids(rows) == ["row 2: assigned → SR-001", "row 3: assigned → SR-002"]
+    assert [r["Requirement ID"] for r in rows] == ["SR-001", "SR-002"]
+    assert reqtable.validate_rows(rows) == []
+
+
+def test_assignment_adopts_the_manual_prefix_and_continues_after_max():
+    from fusa.tools import reqtable
+    rows = reqtable.parse(io.BytesIO(make_upload([GOOD_ROW | {"Requirement ID": "CR-007"},
+                                                  NON_FUSA_ROW | {"Requirement ID": ""}])))
+    reqtable.normalise_ids(rows)
+    assert [r["Requirement ID"] for r in rows] == ["CR-007", "CR-008"]   # no collision
+
+
+def test_apply_ids_writes_generated_ids_back_into_workbook():
+    from fusa.tools import reqtable
+    body = make_upload([GOOD_ROW | {"Requirement ID": ""}])
+    rows = reqtable.parse(io.BytesIO(body))
+    reqtable.normalise_ids(rows)
+    reparsed = reqtable.parse(io.BytesIO(reqtable.apply_ids(body, rows)))
+    assert reparsed[0]["Requirement ID"] == "SR-001"
+
+
 # ---- parse + validate -------------------------------------------------------
 
 def test_valid_rows_pass(tmp_path):
@@ -65,10 +101,25 @@ def test_valid_rows_pass(tmp_path):
     assert reqtable.validate_rows(rows) == []
 
 
-def test_duplicate_id_rejected():
+def test_duplicate_id_is_renumbered_not_rejected():
     from fusa.tools import reqtable
     rows = reqtable.parse(io.BytesIO(make_upload([GOOD_ROW, GOOD_ROW])))
-    assert any("duplicate" in e.lower() and "SR-001" in e for e in reqtable.validate_rows(rows))
+    notes = reqtable.normalise_ids(rows)
+    assert [r["Requirement ID"] for r in rows] == ["SR-001", "SR-002"]
+    assert any("used twice" in n for n in notes)
+    assert reqtable.validate_rows(rows) == []          # no id ever fails an upload
+
+
+def test_loose_id_spellings_are_made_canonical():
+    from fusa.tools import reqtable
+    rows = reqtable.parse(io.BytesIO(make_upload([
+        GOOD_ROW | {"Requirement ID": "sr-1"},
+        NON_FUSA_ROW | {"Requirement ID": "SR_07"},
+        NON_FUSA_ROW | {"Requirement ID": "TBD"}])))
+    notes = reqtable.normalise_ids(rows)
+    assert [r["Requirement ID"] for r in rows] == ["SR-001", "SR-007", "SR-008"]
+    assert any("'TBD' is not an id" in n for n in notes)
+    assert reqtable.validate_rows(rows) == []
 
 
 def test_fusa_row_missing_asil_and_goal_rejected():
@@ -141,6 +192,20 @@ def test_upload_requirements_saves_sysreq_and_runs_chain(client, workspace):
     assert client.get("/api/status").json()["records"]["SADS"]["status"] == "reviewed"
 
 
+def test_upload_blank_ids_auto_assigned_and_persisted(client, workspace):
+    r = client.post("/api/input/requirements",
+                    content=make_upload([GOOD_ROW | {"Requirement ID": ""},
+                                         NON_FUSA_ROW | {"Requirement ID": ""}]),
+                    headers={"content-type": XLSX})
+    assert r.status_code == 202
+    assert len(r.json()["id_notes"]) == 2
+    assert "### SR-001" in (workspace / "_generated" / "SYS-REQ" / "SYS-REQ.md").read_text()
+    from fusa.tools import reqtable
+    saved = reqtable.parse(workspace / "input" / "safety-requirements.xlsx")
+    assert [x["Requirement ID"] for x in saved] == ["SR-001", "SR-002"]   # written back into the file
+    wait_idle(client)
+
+
 def test_upload_requirements_bad_rows_rejected(client, workspace):
     target = workspace / "input" / "safety-requirements.xlsx"
     before = target.read_bytes() if target.exists() else None
@@ -174,7 +239,25 @@ def test_report_xlsx_download(client):
 def test_dashboard_offers_template_and_excel_report(client):
     html = client.get("/").text
     assert "/api/template/requirements" in html
+    assert "/api/template/fmeda" in html
+    assert 'id="templates"' in html                  # one click from the header, not buried
     assert "/report.xlsx" in html
+
+
+def test_fmeda_template_download_is_valid_input(client):
+    from fusa.ui.server import validate_fmeda_csv
+    r = client.get("/api/template/fmeda")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    rows, errors = validate_fmeda_csv(r.text)        # the template passes its own validator
+    assert rows == 5 and errors == []
+    assert r.text.startswith("# category:")          # legend survives, comments are skipped
+
+
+def test_uploading_the_fmeda_template_unchanged_is_accepted(client):
+    r = client.post("/api/input/fmeda", content=client.get("/api/template/fmeda").text,
+                    headers={"content-type": "text/csv"})
+    assert r.status_code == 202
+    wait_idle(client)
 
 
 # ---- CLI --------------------------------------------------------------------
@@ -184,3 +267,26 @@ def test_cli_template_writes_file(workspace, tmp_path):
     out = tmp_path / "template.xlsx"
     assert fusa.cli.main(["template", "--out", str(out)]) == 0
     assert load_workbook(out)["Requirements"] is not None
+
+
+def test_cli_template_writes_fmeda_csv(workspace, tmp_path):
+    import fusa.cli
+    out = tmp_path / "fmeda.csv"
+    assert fusa.cli.main(["template", "--kind", "fmeda", "--out", str(out)]) == 0
+    assert "element,mode,lam_fit,category,dc,safety_mechanism" in out.read_text()
+
+
+# ---- ids never throw, anywhere ----------------------------------------------
+
+def test_gate_runs_on_an_imported_work_product(client, workspace):
+    """SYS-REQ has no agent; `fusa gate SYS-REQ` used to raise KeyError."""
+    import fusa.cli
+    client.post("/api/input/requirements", content=make_upload([GOOD_ROW]), headers={"content-type": XLSX})
+    wait_idle(client)
+    assert fusa.cli.main(["gate", "SYS-REQ"]) == 0            # gates clean, no exception
+
+
+def test_gate_on_an_unknown_work_product_exits_cleanly(workspace, capsys):
+    import fusa.cli
+    assert fusa.cli.main(["gate", "NO-SUCH-WP"]) == 2
+    assert "no work product" in capsys.readouterr().err

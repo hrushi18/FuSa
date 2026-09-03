@@ -38,6 +38,9 @@ python -m fusa export-reqif TSR                       # -> _generated/TSR/TSR.re
 python -m fusa aspice                                 # base-practice coverage over the status board
 python -m fusa report --asil B                        # release validation -> _generated/VALIDATION-REPORT.md (exit 1 if not releasable)
 python -m fusa template                               # write the 23-column safety-requirements Excel template (+ Description sheet)
+python -m fusa template --kind fmeda                  # write the FMEDA failure-mode CSV template (also ⬇ Templates in the dashboard)
+                                                      #   Requirement IDs fill themselves in (SR-nnn); `sr-1`, blanks and repeats are
+                                                      #   made canonical on import — an id never rejects an upload
 python -m fusa ui                                     # dashboard: live RELEASABLE/NOT RELEASABLE badge + printable report at /report
                                                       #   ⬆ Inputs: drop the filled requirements .xlsx (-> SYS-REQ) or FMEDA .csv — validated, saved, chain re-runs
                                                       #   ⬇ Excel report: /report.xlsx — Summary (verdict + lifecycle: Item→HARA→Safety Goals→FSR→TSR→Design→Verification→Safety Validation),
@@ -45,8 +48,16 @@ python -m fusa ui                                     # dashboard: live RELEASAB
 pytest
 ```
 
-Env switches: `FUSA_MODEL` (default `claude-sonnet-5`), `FUSA_DRY_RUN=1`, `FUSA_STRICT_PENDING=1`
+Env switches: `FUSA_PROVIDER` (`anthropic` | `grok` | `groq` | `openai` | `gemini`),
+`FUSA_MODEL` (defaults: `claude-sonnet-5` / `grok-4.6` / `openai/gpt-oss-120b` / `gpt-5.6` /
+`gemini-3.1-pro`), the provider's key (`XAI_API_KEY`/`GROK_API_KEY`, `GROQ_API_KEY`,
+`OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY`), `FUSA_DRY_RUN=1`, `FUSA_STRICT_PENDING=1`
 (downstream may not start while upstream has PENDING markers), `FUSA_ROOT`.
+
+Runs against a **local LLM** (Ollama, LM Studio, vLLM) via `ANTHROPIC_BASE_URL`, or against
+**Grok (xAI)**, **Groq (GroqCloud)**, **OpenAI** or **Gemini** — provider, model and API key
+are also settable live in the dashboard (**⚙ LLM**), or once in a gitignored `.env`
+(copy `.env.example`). See [docs/SOP-local-llm.md](docs/SOP-local-llm.md).
 
 ## How the principles are enforced (not just stated)
 
@@ -57,6 +68,8 @@ Env switches: `FUSA_MODEL` (default `claude-sonnet-5`), `FUSA_DRY_RUN=1`, `FUSA_
 | Defined once, referenced everywhere | `gate.py` rejects any `SM-nnn` not defined in `SM-CATALOG` |
 | Pending is a valid state | `[PENDING: … <- agent]` grammar; counted by the gate; never a review finding by itself |
 | Deterministic where it counts | ids, parents, coverage: `tools/ids.py` + `gate.py`; SPFM/LFM/PMHF: `tools/metrics.py` (`tools: [metrics]` in the spec) |
+| One id convention, no id ever throws | `ids.canonical` is the single spelling rule (`sr-1` → `SR-001`) used at both boundaries — `reqtable.normalise_ids` for the spreadsheet, `ids.normalise_items` for authored work products. Blanks are assigned, repeats renumbered, junk replaced; every change is reported, none is an error. `fusa gate` also works on an imported work product (`SYS-REQ`), which has no agent |
+| Ids belong to the framework, not the model | `ids.normalise_items` runs on every authored draft before the gate: `### HZ-nnn` placeholders are numbered, `HZ-1` padded, duplicates renumbered, `## HZ-002 — title` recovered into an item + `- title:`, and an id owned by another work product (`AOU` in a HARA) is demoted to commentary naming its owner instead of failing the run |
 | Independent review | `ReviewAgent` is constructed on `ConventionsView`, which has no `.method()`; asserted in code and in tests |
 | Feedback loop | a reviewer finding with `returns_to: <agent>` puts that upstream work product into `REWORK` |
 

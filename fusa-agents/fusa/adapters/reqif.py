@@ -38,7 +38,10 @@ def _xhtml_text(el: ET.Element) -> str:
 
 
 def parse(path: str | Path) -> list[ReqIfObject]:
-    root = ET.parse(path).getroot()
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as e:
+        raise ValueError(f"{Path(path).name} is not readable ReqIF XML: {e}") from None
     # attribute definitions: id -> long name
     defs: dict[str, str] = {}
     for d in root.iter():

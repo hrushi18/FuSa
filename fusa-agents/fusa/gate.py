@@ -10,6 +10,9 @@ Checks (all deterministic, no model involved):
   - unknown SM references: SM-nnn used but not defined in SM-CATALOG
   - pending markers are counted, reported, and never invented away
 
+Item ids were already made deterministic before this runs (ids.normalise_items, called by the
+authoring agent), so a prefix error here means a genuine scope problem, not model sloppiness.
+
 A failed gate blocks the analysis from reaching review.
 """
 from __future__ import annotations
@@ -23,10 +26,11 @@ from .tools import ids
 SM_CATALOG = "SM-CATALOG"
 
 
-def run_gate(spec: AgentSpec, content: str, store: GeneratedStore, *, require_full_coverage: bool = False) -> GateResult:
+def run_gate(spec: AgentSpec, content: str, store: GeneratedStore, *, require_full_coverage: bool = False,
+             extra_warnings: list[str] | tuple = ()) -> GateResult:
     wp = spec.work_product
     errors: list[str] = []
-    warnings: list[str] = []
+    warnings: list[str] = [f"id normalised: {n}" for n in extra_warnings]
 
     fm = ids.parse_front_matter(content)
     if not fm:

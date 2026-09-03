@@ -1,7 +1,10 @@
 """fusa ui — dashboard server.
 
     GET  /                    single-page dashboard
-    GET  /api/meta            model, dry-run flag, root
+    GET  /api/meta            provider, model, dry-run flag, root
+    GET  /api/settings        LLM backend: provider, model, whether a key is configured (never the key)
+    POST /api/settings        switch provider/model, set API key (kept in memory only; 409 while busy)
+    POST /api/settings/test   one tiny live completion to verify the configured backend
     GET  /api/agents          every declared agent (enabled or not) + live status
     GET  /api/plan            creation order of enabled producing agents
     GET  /api/status          work-product records + running flag
@@ -12,6 +15,7 @@
     POST /api/input/fmeda     upload failure-mode CSV (validated) -> saves + runs the chain
     GET  /api/template/requirements   download the safety-requirements Excel template
     POST /api/input/requirements      upload filled template -> SYS-REQ + runs the chain
+                                      (blank Requirement IDs are auto-assigned and written back)
     GET  /report.xlsx         Excel results workbook (summary, requirements, evidence)
     GET  /api/report          live release validation (verdict + evidence)
     POST /api/report          same, and writes _generated/VALIDATION-REPORT.md
@@ -30,21 +34,22 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
+from ..agents.llm import PROVIDERS
 from ..models import Status
-from ..orchestrator import Orchestrator
+from ..orchestrator import Orchestrator, UnknownAgent
 from ..report import render_html, validate, write_report
 from ..tools import reqtable
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 STATIC = Path(__file__).parent / "static"
-FMEDA_COLUMNS = ["element", "mode", "lam_fit", "category", "dc", "safety_mechanism"]
+FMEDA_COLUMNS = reqtable.FMEDA_COLUMNS        # one home for the column registry
 
 
 def validate_fmeda_csv(text: str) -> tuple[int, list[str]]:
     """Row count + errors; same semantics as tools.metrics.load_csv."""
-    from ..tools.metrics import FailureMode
-    reader = csv.DictReader(io.StringIO(text))
+    from ..tools.metrics import FailureMode, uncommented
+    reader = csv.DictReader(uncommented(io.StringIO(text)))
     missing = set(FMEDA_COLUMNS) - set(reader.fieldnames or [])
     if missing:
         return 0, ["missing column(s): " + ", ".join(sorted(missing))]
@@ -105,8 +110,38 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
 
     @app.get("/api/meta")
     def meta():
-        return {"dry_run": orch.llm.dry_run, "model": orch.llm.model,
+        return {"dry_run": orch.llm.dry_run, "provider": orch.llm.provider, "model": orch.llm.model,
                 "root": str(orch.root), "strict_pending": orch.strict}
+
+    @app.get("/api/settings")
+    def settings():
+        return {"provider": orch.llm.provider, "model": orch.llm.model, "dry_run": orch.llm.dry_run,
+                "api_key_set": bool(orch.llm.resolved_key()),
+                "providers": {pid: {"label": p["label"], "default_model": p["default_model"],
+                                    "key_env": list(p["key_env"])}
+                              for pid, p in PROVIDERS.items()}}
+
+    @app.post("/api/settings")
+    async def settings_post(request: Request):
+        data = await request.json()
+        if runner.busy:
+            raise HTTPException(status_code=409, detail="a run is in progress — change the backend when it finishes")
+        try:
+            orch.llm.configure(provider=data.get("provider"), model=(data.get("model") or "").strip() or None,
+                               api_key=(data.get("api_key") or "").strip() or None)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return settings()                             # the key itself is never echoed back
+
+    @app.post("/api/settings/test")
+    def settings_test():
+        if orch.llm.dry_run:
+            return {"ok": True, "note": "dry-run mode — no model call made"}
+        try:
+            reply = orch.llm.complete("Reply with exactly: OK", "ping")
+            return {"ok": True, "reply": reply.strip()[:80]}
+        except Exception as e:                        # surface to the settings panel, never 500
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
     @app.get("/api/agents")
     def agents():
@@ -167,6 +202,11 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
         return Response(reqtable.template_bytes(), media_type=XLSX,
                         headers={"content-disposition": 'attachment; filename="safety-requirements-template.xlsx"'})
 
+    @app.get("/api/template/fmeda")
+    def template_fmeda():
+        return Response(reqtable.fmeda_template_text(), media_type="text/csv",
+                        headers={"content-disposition": 'attachment; filename="fmeda-failure-modes-template.csv"'})
+
     @app.post("/api/input/requirements", status_code=202)
     async def upload_requirements(request: Request):
         body = await request.body()
@@ -174,6 +214,7 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
             rows = reqtable.parse(io.BytesIO(body))
         except Exception:
             raise HTTPException(status_code=400, detail=["not a readable .xlsx workbook"])
+        notes = reqtable.normalise_ids(rows)     # ids are repaired here, never a reason to reject
         errors = reqtable.validate_rows(rows)
         if not rows:
             errors.append("no requirement rows found")
@@ -181,6 +222,8 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
             raise HTTPException(status_code=400, detail=errors)
         if runner.busy:
             raise HTTPException(status_code=409, detail="a run is already in progress")
+        if notes:                                # persist them: the saved file is the id record
+            body = reqtable.apply_ids(body, rows)
         path = orch.root / "input" / "safety-requirements.xlsx"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)
@@ -188,7 +231,7 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
         orch.reg.process.update("SYS-REQ", "reqtable-import", status=Status.GATE_PASSED, path=str(wp_path))
         runner.start("run-all (new requirements input)", lambda log: orch.run_all(log=log))
         return {"saved": str(path), "rows": len(rows), "fusa_relevant": len(reqtable.fusa_rows(rows)),
-                "work_product": "SYS-REQ", "started": "run-all"}
+                "id_notes": notes, "work_product": "SYS-REQ", "started": "run-all"}
 
     @app.get("/report.xlsx")
     def report_xlsx(asil: str = "B"):
@@ -212,8 +255,10 @@ def create_app(root: Path | None = None, dry_run: bool | None = None) -> FastAPI
 
     @app.post("/api/run/{agent_id}", status_code=202)
     def run(agent_id: str):
-        if agent_id not in orch.by_id:
-            raise HTTPException(status_code=404, detail=f"unknown agent '{agent_id}'")
+        try:
+            orch.resolve(agent_id)          # disabled/unknown fails here, not in the worker thread
+        except UnknownAgent as e:
+            raise HTTPException(status_code=404, detail=str(e))
         runner.start(f"run {agent_id}", lambda log: orch.run(agent_id, log=log))
         return {"started": agent_id}
 
