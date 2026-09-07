@@ -127,3 +127,43 @@ def test_the_shipped_sample_passes_every_rule():
     wps = {a["work_product"] for a in specs["agents"]}
     checklists = {p.stem for p in (ROOT / "_checklist-register").glob("*.yaml")}
     assert check_bundle(reg, work_products=wps, checklists=checklists) == []
+
+
+# ---- the boundaries: a cap is the longest allowed, an index stops one short of the count ----
+
+def test_a_card_body_of_exactly_the_word_cap_is_allowed():
+    body = " ".join(["word"] * WORD_CAP)
+    assert check_module(module(cards=[{"type": "concept", "title": "C", "body": body}])) == []
+
+
+def test_an_answer_index_equal_to_the_option_count_is_an_error():
+    """Options are numbered from zero, so len(options) is one past the last of them."""
+    errs = check_module(module(quiz=[
+        {"id": "q1", "type": "single", "prompt": "p", "options": ["a", "b"],
+         "answer": 2, "explanation": "x"}]))
+    assert any("answer" in e for e in errs)
+
+
+def test_a_card_ref_equal_to_the_card_count_is_an_error():
+    errs = check_module(module(quiz=[
+        {"id": "q1", "type": "single", "prompt": "p", "options": ["a", "b"],
+         "answer": 0, "explanation": "x", "card_ref": 1}]))       # the module has one card
+    assert any("card_ref" in e for e in errs)
+
+
+def test_an_inline_check_answered_by_its_first_option_is_valid():
+    assert check_module(module(inline_check={
+        "prompt": "p", "options": ["a", "b"], "answer": 0, "explanation": "why"})) == []
+
+
+def test_an_inline_check_answering_past_its_last_option_is_an_error():
+    errs = check_module(module(inline_check={
+        "prompt": "p", "options": ["a", "b"], "answer": 2, "explanation": "why"}))
+    assert any("index" in e for e in errs)
+
+
+def test_an_inline_check_with_no_answer_at_all_is_an_error_not_a_crash():
+    """Hand-authored content omits fields; the author needs to be told which, not a KeyError."""
+    errs = check_module(module(inline_check={
+        "prompt": "p", "options": ["a", "b"], "explanation": "why"}))
+    assert any("index" in e for e in errs)

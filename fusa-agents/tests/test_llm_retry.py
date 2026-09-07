@@ -29,8 +29,10 @@ def responder(monkeypatch, *responses):
     def fake_post(u, headers=None, json=None, timeout=None):
         calls.append(u)
         status, body, hdrs = queue.pop(0) if len(queue) > 1 else queue[0]
-        return httpx.Response(status, json=body, headers=hdrs or {},
-                              request=httpx.Request("POST", u))
+        # a str body is a provider that answered with something other than JSON
+        payload = {"content": body} if isinstance(body, str) else {"json": body}
+        return httpx.Response(status, headers=hdrs or {},
+                              request=httpx.Request("POST", u), **payload)
 
     monkeypatch.setattr(httpx, "post", fake_post)
     monkeypatch.setattr("time.sleep", lambda s: slept.append(s))
@@ -116,3 +118,32 @@ def test_the_cli_reports_a_rate_limit_as_one_line_not_a_traceback(workspace, mon
     err = capsys.readouterr().err
     assert code == 3                                   # transient: distinct from a setup problem (2)
     assert "tokens per minute (TPM)" in err and "Traceback" not in err
+
+
+def test_a_wait_of_exactly_the_cap_is_still_waited_out(monkeypatch):
+    """MAX_RETRY_WAIT is the longest wait this run will sit through, not the first it refuses."""
+    from fusa.agents.llm import MAX_RETRY_WAIT
+    _, slept = responder(monkeypatch, (429, RATE_BODY, {"retry-after": str(int(MAX_RETRY_WAIT))}),
+                         (200, OK_BODY, None))
+    assert groq().complete("sys", "user") == "the work product"
+    assert slept == [MAX_RETRY_WAIT]
+
+
+def test_a_limit_that_outlasts_every_retry_says_how_many_attempts_it_made(monkeypatch):
+    """'still limited after 4 attempts' and 'asked for longer than we will wait' call for
+    different reactions, and the count is the reader's evidence that we did try."""
+    from fusa.agents.llm import MAX_RETRIES, MAX_RETRY_WAIT
+    _, slept = responder(monkeypatch, (429, RATE_BODY, {"retry-after": str(int(MAX_RETRY_WAIT))}))
+    with pytest.raises(LLMRateLimitError) as e:
+        groq().complete("sys", "user")
+    assert slept == [MAX_RETRY_WAIT] * MAX_RETRIES
+    assert f"still limited after {MAX_RETRIES + 1} attempts" in str(e.value)
+
+
+def test_an_error_body_that_is_not_json_is_still_quoted_back(monkeypatch):
+    """A gateway's HTML page is the only explanation there is; dropping it leaves the log
+    saying nothing about why the run stopped."""
+    responder(monkeypatch, (429, "<html>too many requests</html>", {"retry-after": "3600"}))
+    with pytest.raises(LLMRateLimitError) as e:
+        groq().complete("sys", "user")
+    assert "too many requests" in str(e.value)

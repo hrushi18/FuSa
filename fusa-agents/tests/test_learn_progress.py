@@ -129,3 +129,42 @@ def test_a_negative_cards_seen_in_the_file_reads_as_nothing_started(tmp_path):
 def test_a_bad_record_is_replaced_rather_than_crashing_the_next_write(tmp_path):
     write(tmp_path, {"version": 1, "modules": {"concept.hara": {"best": "0.9"}}})
     assert store(tmp_path).record("concept.hara", score=1.0)["best"] == 1.0
+
+
+def test_a_cards_seen_of_true_reads_as_nothing_started(tmp_path):
+    """`True` is an `int` in Python, so a hand edit of `"cards_seen": true` would otherwise
+    count as one card seen and open a module the learner has never touched."""
+    write(tmp_path, {"version": 1, "modules": {"concept.hara": {"cards_seen": True}}})
+    s = store(tmp_path)
+    assert s.status("concept.hara") == "not_started"
+    assert s.summary() == {}
+
+
+def test_an_attempts_count_that_is_not_a_number_costs_the_count_not_the_pass(tmp_path):
+    """A tally nobody reads is not worth losing a recorded pass over."""
+    write(tmp_path, {"version": 1, "modules": {"concept.hara": {"best": 0.9, "attempts": "many"}}})
+    s = store(tmp_path)
+    assert s.status("concept.hara") == "passed"
+    assert s.summary()["concept.hara"]["attempts"] == 0
+
+
+def test_a_negative_attempts_count_is_reset_to_zero(tmp_path):
+    write(tmp_path, {"version": 1, "modules": {"concept.hara": {"best": 0.9, "attempts": -3}}})
+    assert store(tmp_path).summary()["concept.hara"]["attempts"] == 0
+
+
+def test_seeing_fewer_cards_on_a_revisit_does_not_undo_the_ones_already_seen(tmp_path):
+    """Reopening a module and closing it early is normal; progress going backwards reads as
+    lost work."""
+    s = store(tmp_path)
+    s.record("concept.hara", cards_seen=5)
+    s.record("concept.hara", cards_seen=2)
+    assert s.load()["modules"]["concept.hara"]["cards_seen"] == 5
+
+
+def test_progress_is_written_even_when_its_directory_does_not_exist_yet(tmp_path):
+    """The file lands beside the rest of a project's generated state, which a fresh clone has
+    not created yet."""
+    s = ProgressStore(tmp_path / "_generated" / "learn" / "learning-progress.json")
+    s.record("concept.hara", score=1.0)
+    assert s.status("concept.hara") == "passed"

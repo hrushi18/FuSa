@@ -110,3 +110,10 @@ def test_a_mis_encoded_file_is_reported_by_name_too(sample, tmp_path):
     (local / "modules" / "latin1.json").write_bytes(b'{"id": "x", "title": "caf\xe9"}')
     with pytest.raises(ValueError, match=r"latin1\.json"):
         ContentRegistry(sample, local).modules()
+
+
+def test_no_local_directory_at_all_still_serves_the_sample(sample):
+    """A fresh clone sets no FUSA_CONTENT_DIR, and that is the default way to run the course."""
+    reg = ContentRegistry(sample, None)
+    assert [m["id"] for m in reg.modules()] == ["orientation.intro"]
+    assert reg.groups() and reg.glossary()

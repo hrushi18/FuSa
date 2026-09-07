@@ -183,3 +183,37 @@ def test_grok_runs_sys_hara_through_the_gate(workspace, monkeypatch):
 def test_unknown_provider_raises_in_constructor():
     with pytest.raises(ValueError, match="unknown provider"):
         LLM(provider="no-such-provider", dry_run=True)
+
+
+def test_an_explicitly_requested_model_is_used_exactly_as_given():
+    assert LLM(provider="groq", model="llama-3.3-70b", dry_run=True).model == "llama-3.3-70b"
+
+
+def test_fusa_model_applies_to_the_configured_provider_only(monkeypatch):
+    """FUSA_MODEL names a model of the provider it was set for. Handing it to another provider
+    asks for a model id that one has never heard of."""
+    from fusa import config
+    monkeypatch.setattr(config, "PROVIDER", "anthropic")
+    monkeypatch.setattr(config, "MODEL", "claude-tuned-for-this-repo")
+    assert LLM(dry_run=True).model == "claude-tuned-for-this-repo"
+    assert LLM(provider="groq", dry_run=True).model == PROVIDERS["groq"]["default_model"]
+
+
+def test_reconfiguring_the_same_provider_keeps_the_model_you_chose():
+    """Re-saving the settings form without touching the model must not reset it underneath you."""
+    llm = LLM(provider="groq", model="llama-3.3-70b", dry_run=True)
+    llm.configure(provider="groq", api_key="gsk-test")
+    assert llm.model == "llama-3.3-70b"
+
+
+@pytest.mark.parametrize("provider,expected", [
+    ("groq", "set GROQ_API_KEY,"),
+    ("grok", "set XAI_API_KEY (or GROK_API_KEY),")])
+def test_the_missing_key_message_names_the_variables_to_type(monkeypatch, provider, expected):
+    """It is read by someone who has to type the variable name, so a stray bracket costs them
+    a second failed run."""
+    for env in PROVIDERS[provider]["key_env"]:
+        monkeypatch.delenv(env, raising=False)
+    with pytest.raises(RuntimeError) as e:
+        LLM(provider=provider, dry_run=False).complete("s", "u")
+    assert expected in str(e.value)
