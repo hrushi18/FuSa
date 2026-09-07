@@ -2,8 +2,8 @@
 // stop a lesson becoming a wall of text.
 import { setProgress } from "./app.js";
 import { PHASES, vmodelSvg } from "./vmodel.js";
+import { esc } from "./esc.js";
 
-const esc = s => { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; };
 const KIND = { concept: "Concept", example: "Worked example",
                why: "Why it matters", diagram: "Where this sits" };
 
@@ -41,7 +41,25 @@ export function renderModule(mod, host) {
     }).then(r => r.ok && r.json()).then(rec => rec && setProgress(mod.id, rec));
   };
 
+  // rules.py flags an empty module (no cards, no inline check) but doesn't block
+  // rendering — cards[0] would be undefined here, so give it an explicit empty state.
   const draw = () => {
+    if (total === 0) {
+      const hasQuiz = (mod.quiz || []).length > 0;
+      host.innerHTML = `<h2 style="font-size:16px;margin:0 0 4px">${esc(mod.title)}</h2>
+        <p style="color:var(--dim);font-size:11px;margin:0 0 16px">
+          ${esc((mod.clauses || []).join(" · ") || "no clause reference")}</p>
+        <div class="card"><span class="kind">No content yet</span>
+          <p>This module has no cards yet.</p></div>
+        ${hasQuiz ? `<div class="pager"><button id="next">Take the quiz →</button></div>` : ""}`;
+      if (hasQuiz) {
+        host.querySelector("#next").onclick = async () => {
+          const { startQuiz } = await import("./quiz.js");
+          startQuiz(mod, host);
+        };
+      }
+      return;
+    }
     const isCheck = mod.inline_check && at === cards.length;
     host.innerHTML = `<h2 style="font-size:16px;margin:0 0 4px">${esc(mod.title)}</h2>
       <p style="color:var(--dim);font-size:11px;margin:0 0 16px">

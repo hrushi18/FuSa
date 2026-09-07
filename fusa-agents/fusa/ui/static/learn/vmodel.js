@@ -17,8 +17,9 @@ const BOXES = [
   {id: "assessment",  label: "Assessment",            x: 368, y: 48},
 ];
 
+import { esc } from "./esc.js";
+
 const W = 150, H = 26;
-const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export function vmodelSvg(reveal = "all", alt = "") {
   const at = PHASES.indexOf(reveal);

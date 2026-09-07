@@ -1,11 +1,10 @@
 // The nav IS the V-model: groups in lifecycle order, so a practitioner needs no legend.
 import { state } from "./app.js";
+import { esc } from "./esc.js";
 
 export const STATUS_ICON = {
   not_started: "○", in_progress: "◐", passed: "✓", needs_review: "⚑",
 };
-
-const esc = s => { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; };
 
 const statusOf = id => state.progress[id]?.status || "not_started";
 const modulesOf = gid => state.modules.filter(m => m.group === gid);

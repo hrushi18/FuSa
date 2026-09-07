@@ -2,8 +2,8 @@
 // and lets the server decide, so the threshold is one configurable value rather than a number
 // duplicated in the browser.
 import { setProgress, state } from "./app.js";
+import { esc } from "./esc.js";
 
-const esc = s => { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; };
 const same = (a, b) => a.length === b.length && a.every(x => b.includes(x));
 
 export function startQuiz(mod, host) {
