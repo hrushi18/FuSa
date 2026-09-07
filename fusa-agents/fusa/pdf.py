@@ -100,9 +100,9 @@ def render_pdf(rep: ValidationReport) -> bytes:
                                    fontName="Helvetica-Bold", textColor=colors.HexColor(INK)),
     }
 
-    def para(text: str, style="cell") -> Paragraph:
+    def para(text: str, style="cell", colour: str | None = None) -> Paragraph:
         safe = str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        return Paragraph(safe, S[style])
+        return Paragraph(f"<font color='{colour}'>{safe}</font>" if colour else safe, S[style])
 
     def grid(data, widths, head_repeat=True, extra=()) -> LongTable:
         t = LongTable(data, colWidths=widths, repeatRows=1 if head_repeat else 0)
@@ -151,15 +151,16 @@ def render_pdf(rep: ValidationReport) -> bytes:
 
     ev_widths = [0.13, 0.13, 0.09, 0.11, 0.08, 0.08, 0.12, 0.1, 0.16]
     ev = [[para(c, "cellhead") for c in EVIDENCE_HEADER]]
-    prov_style = []
-    for n, row in enumerate(_evidence_rows(rep), start=1):
-        ev.append([para(c) for c in row])
-        prov_style.append(("TEXTCOLOR", (2, n), (2, n),
-                           colors.HexColor(MODEL if row[2] == "MODEL" else MACHINE)))
-        prov_style.append(("TEXTCOLOR", (8, n), (8, n),
-                           colors.HexColor(OK_GREEN if row[8] == "OK" else NOT_RED)))
+    for row in _evidence_rows(rep):
+        # The colour goes on the paragraph, not into a TableStyle TEXTCOLOR: a cell holding a
+        # flowable paints itself, so the style command never reaches it and the two columns
+        # this report is built around came out plain ink.
+        cells = [para(c) for c in row]
+        cells[2] = para(row[2], colour=MODEL if row[2] == "MODEL" else MACHINE)
+        cells[8] = para(row[8], colour=OK_GREEN if row[8] == "OK" else NOT_RED)
+        ev.append(cells)
     story += [Paragraph("Work-product evidence", S["h2"]),
-              grid(ev, [width * w for w in ev_widths], extra=prov_style)]
+              grid(ev, [width * w for w in ev_widths])]
 
     findings = [(a.work_product, f) for a in rep.work_products for f in a.findings]
     if findings:
