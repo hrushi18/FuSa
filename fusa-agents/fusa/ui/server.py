@@ -40,6 +40,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from .. import config
 from ..agents.llm import PROVIDERS
@@ -508,6 +509,7 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
     def index():
         return FileResponse(STATIC / "index.html")
 
+    app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app
 
 

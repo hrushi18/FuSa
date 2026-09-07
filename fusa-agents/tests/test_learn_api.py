@@ -56,3 +56,20 @@ def test_the_learn_page_is_served(client):
 def test_the_workbench_is_untouched_by_all_this(client):
     assert client.get("/").status_code == 200
     assert client.get("/api/agents").status_code == 200
+
+
+def test_both_pages_share_one_token_file(client):
+    """One design system means one place the colours are defined, not two that drift."""
+    css = client.get("/static/tokens.css")
+    assert css.status_code == 200
+    for token in ("--bg:", "--p-model:", "--asil-d:"):
+        assert token in css.text
+    assert "tokens.css" in client.get("/").text
+    assert "tokens.css" in client.get("/learn").text
+
+
+def test_the_shell_offers_the_nav_the_top_bar_and_the_content_region(client):
+    html = client.get("/learn").text
+    for marker in ('id="learn-nav"', 'id="learn-main"', 'id="learn-crumb"',
+                   'id="learn-progress"', "app.js"):
+        assert marker in html

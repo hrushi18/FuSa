@@ -4,19 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FuSa Agent Framework</title>
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
-  :root {
-    --bg: #0e1116; --panel: #161b23; --panel2: #1c232e; --line: #2a3441;
-    --text: #d7dee8; --dim: #7d8a9b; --accent: #5ba8f5;
-    --c-not_started: #48566a; --c-blocked: #d9a441; --c-drafted: #5ba8f5;
-    --c-gate_passed: #3fbcb2; --c-gate_failed: #e05555; --c-rework: #e08a3c;
-    --c-reviewed: #52c47c; --c-disabled: #333c48;
-    /* provenance — the one idea this dashboard is built around:
-       who decided a thing is more important than what it says. */
-    --p-machine: #3fbcb2;   /* a table, a tool, a rule — reproducible */
-    --p-model:   #9d7bf0;   /* a language model — plausible, not reproducible */
-    --p-human:   #d9a441;   /* a person must sign it */
-  }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.45 "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
