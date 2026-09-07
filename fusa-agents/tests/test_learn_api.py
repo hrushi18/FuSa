@@ -73,3 +73,20 @@ def test_the_shell_offers_the_nav_the_top_bar_and_the_content_region(client):
     for marker in ('id="learn-nav"', 'id="learn-main"', 'id="learn-crumb"',
                    'id="learn-progress"', "app.js"):
         assert marker in html
+
+
+def test_a_passing_score_flips_the_module_to_passed(client):
+    """The engine posts a fraction; the server owns what counts as a pass."""
+    r = client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": 1.0})
+    assert r.json()["status"] == "passed"
+
+
+def test_a_failing_score_flips_the_module_to_needs_review(client):
+    r = client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": 0.33})
+    assert r.json()["status"] == "needs_review"
+
+
+def test_a_retake_cannot_lose_an_earned_pass(client):
+    client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": 1.0})
+    r = client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": 0.0})
+    assert r.json()["status"] == "passed" and r.json()["attempts"] == 2

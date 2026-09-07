@@ -10,8 +10,8 @@
      "body": "Functional safety covers hazards caused by electrical and electronic systems behaving incorrectly. A brake controller that releases pressure when it should hold is in scope. A battery that catches fire on its own is not, unless a malfunction of an E/E system caused it."},
     {"type": "why", "title": "Why the boundary matters",
      "body": "Teams lose time arguing about hazards the standard never asked them to analyse. Knowing the boundary tells you which risks belong in this process and which belong to another discipline."},
-    {"type": "diagram", "asset": "vmodel", "reveal": "concept",
-     "alt": "The development V-model, with the concept phase highlighted. Work descends from item definition through hazard analysis and the safety concepts, then rises through integration, validation and assessment."}
+    {"type": "diagram", "asset": "vmodel", "reveal": "all",
+     "alt": "The whole development V-model. Work descends the left arm from item definition through hazard analysis and the two safety concepts, reaches hardware and software at the base, then rises the right arm through integration and testing, validation, and assessment."}
   ],
   "inline_check": {
     "prompt": "A wiring harness overheats because a control unit commands a valve to stay open indefinitely. In scope?",
