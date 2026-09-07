@@ -18,6 +18,31 @@ NOT_STARTED, IN_PROGRESS, PASSED, NEEDS_REVIEW = (
     "not_started", "in_progress", "passed", "needs_review")
 
 
+def _empty() -> dict:
+    return {"version": 1, "modules": {}, "tools": {}}
+
+
+def _clean(rec):
+    """One record, or None if a hand edit left it a shape nothing downstream can read.
+
+    Valid JSON with the wrong shape inside is the likelier hand edit than a missing brace, and
+    it used to reach `_status_of` as `"0.9" >= 0.8`. Dropping the record costs one module's
+    history; letting it through costs the whole page.
+    """
+    if not isinstance(rec, dict):
+        return None
+    best = rec.get("best")
+    if best is not None and (isinstance(best, bool) or not isinstance(best, (int, float))):
+        return None
+    seen = rec.get("cards_seen") or 0
+    if isinstance(seen, bool) or not isinstance(seen, int) or seen < 0:
+        return None
+    attempts = rec.get("attempts") or 0
+    if isinstance(attempts, bool) or not isinstance(attempts, int) or attempts < 0:
+        attempts = 0                       # a count nobody reads is not worth losing a pass over
+    return rec | {"best": best, "cards_seen": seen, "attempts": attempts}
+
+
 class ProgressStore:
     def __init__(self, path: Path, pass_mark: float = 0.8):
         self.path = Path(path)
@@ -27,10 +52,13 @@ class ProgressStore:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            return {"version": 1, "modules": {}, "tools": {}}
+            return _empty()
         if not isinstance(data, dict) or not isinstance(data.get("modules"), dict):
-            return {"version": 1, "modules": {}, "tools": {}}
-        data.setdefault("tools", {})
+            return _empty()
+        data["modules"] = {mid: clean for mid, rec in data["modules"].items()
+                           if (clean := _clean(rec)) is not None}
+        if not isinstance(data.get("tools"), dict):
+            data["tools"] = {}
         return data
 
     def _save(self, data: dict) -> None:

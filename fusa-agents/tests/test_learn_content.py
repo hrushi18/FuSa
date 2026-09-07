@@ -84,3 +84,29 @@ def test_a_module_file_that_is_not_json_is_reported_not_swallowed(sample, tmp_pa
     (local / "modules" / "broken.json").write_text("{not json", encoding="utf-8")
     with pytest.raises(ValueError, match="broken.json"):
         ContentRegistry(sample, local).modules()
+
+
+def test_a_module_file_with_no_id_is_reported_by_name_not_a_bare_key_error(sample, tmp_path):
+    """A missing "id" is at least as likely a hand-authoring slip as a missing brace, and the
+    author needs to be told which file and which field."""
+    local = tmp_path / "content"
+    (local / "modules").mkdir(parents=True)
+    (local / "modules" / "no-id.json").write_text('{"title": "no id here"}', encoding="utf-8")
+    with pytest.raises(ValueError, match=r"no-id\.json.*id"):
+        ContentRegistry(sample, local).modules()
+
+
+def test_a_module_file_that_is_not_an_object_is_reported_by_name(sample, tmp_path):
+    local = tmp_path / "content"
+    (local / "modules").mkdir(parents=True)
+    (local / "modules" / "a-list.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"a-list\.json"):
+        ContentRegistry(sample, local).modules()
+
+
+def test_a_mis_encoded_file_is_reported_by_name_too(sample, tmp_path):
+    local = tmp_path / "content"
+    (local / "modules").mkdir(parents=True)
+    (local / "modules" / "latin1.json").write_bytes(b'{"id": "x", "title": "caf\xe9"}')
+    with pytest.raises(ValueError, match=r"latin1\.json"):
+        ContentRegistry(sample, local).modules()

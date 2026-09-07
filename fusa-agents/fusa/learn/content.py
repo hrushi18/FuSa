@@ -17,6 +17,8 @@ def _read_json(path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:      # name the file: "invalid JSON" alone is unfixable
         raise ValueError(f"{path.name}: not valid JSON ({e})") from e
+    except UnicodeDecodeError as e:
+        raise ValueError(f"{path.name}: not UTF-8 ({e})") from e
 
 
 class ContentRegistry:
@@ -49,6 +51,10 @@ class ContentRegistry:
         for d in self._dirs():
             for p in sorted((d / "modules").glob("*.json")) if (d / "modules").is_dir() else []:
                 m = _read_json(p)
+                if not isinstance(m, dict):
+                    raise ValueError(f"{p.name}: a module file must be a JSON object")
+                if not str(m.get("id") or "").strip():
+                    raise ValueError(f'{p.name}: missing required field "id"')
                 by_id[m["id"]] = m
         order = {g["id"]: g.get("order", 0) for g in self.groups()}
         return sorted(by_id.values(),

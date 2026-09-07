@@ -8,7 +8,23 @@ export const state = {
 };
 
 const $ = s => document.querySelector(s);
-const api = (p, opt) => fetch(p, opt).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+
+// An error body is not always JSON — a 500 can arrive as an HTML page — and the server takes
+// real trouble to name the offending file, so the message is worth recovering either way.
+export const api = (p, opt) => fetch(p, opt).then(r => r.ok ? r.json()
+  : r.text().then(t => {
+      let detail = t;
+      try { detail = JSON.parse(t).detail ?? t; } catch { /* not JSON: keep the raw text */ }
+      return Promise.reject(new Error(`${r.status} — ${detail}`.slice(0, 300)));
+    }));
+
+// The one place a problem becomes visible. A learner who sees nothing has no way to know the
+// page is broken rather than empty.
+export function banner(message) {
+  const b = $("#banner");
+  b.className = "on";
+  b.textContent = message;
+}
 
 export async function load() {
   const [content, progress] = await Promise.all([
@@ -17,10 +33,8 @@ export async function load() {
   state.progress = progress.modules;
   state.passMark = content.pass_mark;
   if (content.content_errors?.length) {
-    const b = $("#banner");
-    b.className = "on";
-    b.textContent = `${content.content_errors.length} content problem(s): `
-                  + content.content_errors.slice(0, 3).join(" · ");
+    banner(`${content.content_errors.length} content problem(s): `
+           + content.content_errors.slice(0, 3).join(" · "));
   }
   if (state.groups.length) state.openGroups.add(state.groups[0].id);
 }
@@ -62,4 +76,5 @@ export async function route() {
 
 $("#search").oninput = e => drawNav(select, e.target.value);
 window.addEventListener("hashchange", route);
-load().then(() => { drawOverall(); route(); });
+load().then(() => { drawOverall(); route(); })
+      .catch(err => banner(`the course could not be loaded — ${err.message}`));

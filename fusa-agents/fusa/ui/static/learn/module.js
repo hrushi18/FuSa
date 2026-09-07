@@ -1,6 +1,6 @@
 // One card at a time. The brief asks for flashcards, not a specification: the pager exists to
 // stop a lesson becoming a wall of text.
-import { setProgress } from "./app.js";
+import { saveProgress } from "./progress.js";
 import { PHASES, vmodelSvg } from "./vmodel.js";
 import { esc } from "./esc.js";
 
@@ -35,14 +35,11 @@ export function renderModule(mod, host) {
   const record = () => {
     if (at + 1 <= best) return;                 // only ever report forward progress
     best = at + 1;
-    fetch("/api/learn/progress", {
-      method: "POST", headers: {"content-type": "application/json"},
-      body: JSON.stringify({module_id: mod.id, cards_seen: best}),
-    }).then(r => r.ok && r.json()).then(rec => rec && setProgress(mod.id, rec));
+    saveProgress(mod.id, {cards_seen: best});
   };
 
-  // rules.py flags an empty module (no cards, no inline check) but doesn't block
-  // rendering — cards[0] would be undefined here, so give it an explicit empty state.
+  // A module with no cards and no inline check is not a content-rule error, so it reaches the
+  // renderer intact — and cards[0] would be undefined here. Hence an explicit empty state.
   const draw = () => {
     if (total === 0) {
       const hasQuiz = (mod.quiz || []).length > 0;

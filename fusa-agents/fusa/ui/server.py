@@ -489,17 +489,41 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
     def learn_progress():
         return {"modules": progress.summary(), "pass_mark": config.LEARN_PASS_MARK}
 
+    def _number(value, field: str) -> float:
+        """A bad field should name itself: a traceback tells the author nothing they can fix."""
+        if isinstance(value, bool):
+            raise HTTPException(status_code=400, detail=f"{field} must be a number")
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"{field} must be a number")
+
     @app.post("/api/learn/progress")
     async def learn_progress_post(request: Request):
-        data = await request.json()
-        mid = (data.get("module_id") or "").strip()
+        try:
+            data = await request.json()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="body is not valid JSON")
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="body must be a JSON object")
+        mid = data.get("module_id")
+        if not isinstance(mid, str):
+            raise HTTPException(status_code=400, detail="module_id must be a string")
+        mid = mid.strip()
         if not content.module(mid):
             raise HTTPException(status_code=404, detail=f"no such module: {mid!r}")
         score = data.get("score")
-        if score is not None and not 0.0 <= float(score) <= 1.0:
-            raise HTTPException(status_code=400, detail="score must be between 0 and 1")
-        return progress.record(mid, score=None if score is None else float(score),
-                               cards_seen=data.get("cards_seen"))
+        if score is not None:
+            score = _number(score, "score")
+            if not 0.0 <= score <= 1.0:
+                raise HTTPException(status_code=400, detail="score must be between 0 and 1")
+        seen = data.get("cards_seen")
+        if seen is not None:
+            seen = _number(seen, "cards_seen")
+            if seen < 0:
+                raise HTTPException(status_code=400, detail="cards_seen must not be negative")
+            seen = int(seen)
+        return progress.record(mid, score=score, cards_seen=seen)
 
     @app.get("/learn")
     def learn_page():

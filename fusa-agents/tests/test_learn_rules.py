@@ -65,6 +65,40 @@ def test_a_well_formed_module_has_no_errors():
     assert check_module(module()) == []
 
 
+def test_a_diagram_card_naming_an_asset_this_milestone_cannot_draw_is_an_error():
+    """The renderer draws one diagram. Content authored for another must say so loudly rather
+    than silently getting the V-model with somebody else's alt text."""
+    errs = check_module(module(cards=[
+        {"type": "diagram", "asset": "hara-anatomy.svg", "alt": "the anatomy of a HARA"}]))
+    assert any("hara-anatomy.svg" in e and "milestone" in e for e in errs)
+
+
+def test_a_diagram_card_asking_for_the_vmodel_is_fine():
+    assert check_module(module(cards=[
+        {"type": "diagram", "asset": "vmodel", "alt": "the V-model"}])) == []
+
+
+def test_a_numeric_question_is_rejected_until_the_platform_can_render_one():
+    errs = check_module(module(quiz=[
+        {"id": "q1", "type": "numeric", "prompt": "p", "answer": 3, "explanation": "x"}]))
+    assert any("numeric" in e for e in errs)
+
+
+def test_an_inline_check_without_an_explanation_is_an_error():
+    """It renders as the literal string "undefined" to a learner who got it wrong."""
+    errs = check_module(module(inline_check={
+        "prompt": "p", "options": ["a", "b"], "answer": 1}))
+    assert any("explanation" in e for e in errs)
+
+
+def test_a_multi_question_with_an_empty_answer_is_an_error():
+    """An empty answer scores an empty submission as correct."""
+    errs = check_module(module(quiz=[
+        {"id": "q1", "type": "multi", "prompt": "p", "options": ["a", "b"],
+         "answer": [], "explanation": "x"}]))
+    assert any("answer" in e for e in errs)
+
+
 # ---- the two that are not style ----
 
 def test_a_work_product_the_chain_does_not_produce_is_an_error(tmp_path):

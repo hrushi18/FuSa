@@ -1,7 +1,8 @@
 // Scoring lives here; what counts as a pass lives on the server. The engine posts a fraction
 // and lets the server decide, so the threshold is one configurable value rather than a number
 // duplicated in the browser.
-import { setProgress, state } from "./app.js";
+import { state } from "./app.js";
+import { saveProgress } from "./progress.js";
 import { esc } from "./esc.js";
 
 const same = (a, b) => a.length === b.length && a.every(x => b.includes(x));
@@ -73,10 +74,7 @@ export function startQuiz(mod, host) {
       host.querySelector("#submit").onclick = () => {
         submitted = true;
         draw();
-        fetch("/api/learn/progress", {
-          method: "POST", headers: {"content-type": "application/json"},
-          body: JSON.stringify({module_id: mod.id, score: scoreOf() / questions.length}),
-        }).then(r => r.ok && r.json()).then(rec => rec && setProgress(mod.id, rec));
+        saveProgress(mod.id, {score: scoreOf() / questions.length});
       };
     }
   };

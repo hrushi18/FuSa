@@ -90,3 +90,62 @@ def test_a_retake_cannot_lose_an_earned_pass(client):
     client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": 1.0})
     r = client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": 0.0})
     assert r.json()["status"] == "passed" and r.json()["attempts"] == 2
+
+
+def test_a_hand_edited_progress_file_still_serves_a_page(client, workspace):
+    """The file is meant to be readable and editable; a wrong shape inside it is a nuisance,
+    not a 500 in the middle of a lesson."""
+    (workspace / "_generated" / "learning-progress.json").write_text(
+        '{"version": 1, "modules": {"concept.hara": "passed"}}', encoding="utf-8")
+    r = client.get("/api/learn/progress")
+    assert r.status_code == 200 and r.json()["modules"] == {}
+
+
+# ---- a malformed body is the caller's mistake, and the reply should say which field ----
+
+def test_a_body_that_is_not_a_json_object_is_rejected(client):
+    r = client.request("POST", "/api/learn/progress", json=[1, 2])
+    assert r.status_code == 400
+
+
+def test_a_body_that_is_not_json_at_all_is_rejected(client):
+    r = client.post("/api/learn/progress", content="nope",
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 400
+
+
+def test_a_non_numeric_score_is_rejected_by_name(client):
+    r = client.post("/api/learn/progress", json={"module_id": "concept.hara", "score": "abc"})
+    assert r.status_code == 400 and "score" in str(r.json()["detail"])
+
+
+def test_a_non_numeric_cards_seen_is_rejected_by_name(client):
+    r = client.post("/api/learn/progress",
+                    json={"module_id": "concept.hara", "cards_seen": "abc"})
+    assert r.status_code == 400 and "cards_seen" in str(r.json()["detail"])
+
+
+def test_a_negative_cards_seen_is_rejected_rather_than_silently_clamped(client):
+    r = client.post("/api/learn/progress", json={"module_id": "concept.hara", "cards_seen": -5})
+    assert r.status_code == 400 and "cards_seen" in str(r.json()["detail"])
+
+
+def test_a_module_id_that_is_not_a_string_is_rejected(client):
+    r = client.post("/api/learn/progress", json={"module_id": 7, "score": 1.0})
+    assert r.status_code == 400 and "module_id" in str(r.json()["detail"])
+
+
+def test_one_module_owns_saving_progress_and_both_renderers_go_through_it(client):
+    """Spec §6: the UI reaches storage through one seam, so a different store stays addable —
+    and so a failed save is reported once rather than swallowed in two places."""
+    assert client.get("/static/learn/progress.js").status_code == 200
+    for page in ("module.js", "quiz.js"):
+        js = client.get(f"/static/learn/{page}").text
+        assert "/api/learn/progress" not in js, f"{page} still posts progress itself"
+        assert "./progress.js" in js
+
+
+def test_a_course_that_fails_to_load_says_so_instead_of_showing_a_blank_page(client):
+    js = client.get("/static/learn/app.js").text
+    assert "load()" in js and ".catch(" in js
+    assert "banner" in js

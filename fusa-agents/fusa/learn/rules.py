@@ -14,7 +14,14 @@ INTERNAL_PATTERNS = ("sharepoint.com", "srv.volvo.com", "setoolgtt", "swap://",
                      "Navigator", "FS-QDPR", "WBS", "Volvo")
 
 CARD_TYPES = {"concept", "example", "why", "diagram"}
-QUESTION_TYPES = {"single", "multi", "numeric", "match"}
+
+# The spec's data model also has `numeric` and `match`, but only these two have a renderer and
+# a scorer today; the other two arrive with the ASIL calculator in M3. Validation describes what
+# the product can do now, so content the quiz would crash on is rejected instead of shipped.
+QUESTION_TYPES = {"single", "multi"}
+
+# Likewise one diagram: `vmodel.js` is the only asset this milestone can draw.
+DIAGRAM_ASSET = "vmodel"
 
 
 def check_module(m: dict) -> list[str]:
@@ -25,8 +32,13 @@ def check_module(m: dict) -> list[str]:
         where = f"{mid} card {n}"
         if c.get("type") not in CARD_TYPES:
             errs.append(f"{where}: unknown card type {c.get('type')!r}")
-        if c.get("type") == "diagram" and not (c.get("alt") or "").strip():
-            errs.append(f"{where}: a diagram needs alt text — it is the only version some readers get")
+        if c.get("type") == "diagram":
+            if not (c.get("alt") or "").strip():
+                errs.append(f"{where}: a diagram needs alt text — it is the only version some readers get")
+            asset = c.get("asset") or DIAGRAM_ASSET
+            if asset != DIAGRAM_ASSET:
+                errs.append(f"{where}: asset {asset!r} — custom diagram assets arrive in a later"
+                            f" milestone; only {DIAGRAM_ASSET!r} renders today")
         words = len((c.get("body") or "").split())
         if words > WORD_CAP:
             errs.append(f"{where}: {words} words, over the {WORD_CAP}-word cap")
@@ -43,6 +55,8 @@ def check_module(m: dict) -> list[str]:
         if q.get("type") in ("single", "multi"):
             if isinstance(answer, list) != (q["type"] == "multi"):
                 errs.append(f"{where}: a {q['type']} answer has the wrong shape")
+            elif not wanted:               # an empty answer scores an empty submission as right
+                errs.append(f"{where}: a multi answer with no correct option passes anyone")
             elif any(not isinstance(a, int) or not 0 <= a < len(options) for a in wanted):
                 errs.append(f"{where}: answer {answer!r} is not an index into {len(options)} options")
         ref = q.get("card_ref")
@@ -54,6 +68,9 @@ def check_module(m: dict) -> list[str]:
         opts = check.get("options") or []
         if not isinstance(check.get("answer"), int) or not 0 <= check["answer"] < len(opts):
             errs.append(f"{mid} inline check: answer is not an index into its options")
+        if not (check.get("explanation") or "").strip():
+            errs.append(f"{mid} inline check: needs an explanation — the learner sees it the"
+                        " moment they answer")
     return errs
 
 
