@@ -22,7 +22,13 @@ plan does not inherit them.
 | "22-agent FUSA system" | **30 declared agents, 16 enabled, 13 disabled**, over 7 phases | `agent_mapping` targets work products, not an agent count. No number is hardcoded in copy. |
 | ASIL via "S+E+C formula", "sum < 6 → QM" | The chain uses a **36-key S×E×C lookup** in `_reference-register/asil-table.yaml`, shipped empty | The calculator reads that file. No formula is implemented. See §3. |
 | Assessors check learner competence records | Single-user local, no accounts | Assessors receive the exported PDF. No assessor view is built. |
-| "the two worked examples already in your source deck" | No deck exists in the repo | Content milestone blocks on the deck being supplied. Engineering milestones do not. |
+| "the two worked examples already in your source deck" | Supplied 2026-09-07: `Basics_in_Practice_20210921.pptx`, 143 slides | See §3a. Airbag and Service Brakes examples confirmed present (slides 45, 50, 61, 141–143). |
+
+**Correction to an earlier draft of this spec.** It claimed an additive S+E+C mnemonic "would
+disagree with the table in specific cells". That was asserted without checking and is wrong:
+the mapping on deck slide 57 (sum 7/8/9/10 → A/B/C/D, any zero class → QM) is an exact
+equivalent of the determination table, not an approximation. R2 below is unchanged, but its
+justification is corrected.
 
 ## 2. Decisions
 
@@ -60,8 +66,40 @@ Therefore:
   treats as definitional and handles in code: S0, E0 and C0 are QM.
 - **R4.** Worked examples use the user's own teaching cases, not extracts from the standard.
 
-R2 has a second benefit: a learner is taught exactly the mapping their own chain applies, so
-training and tool can never disagree. An additive mnemonic would disagree in specific cells.
+Three reasons R2 holds even though the formula is exact:
+
+1. A formula that reproduces the table exactly **is** the table in compressed form. Implementing
+   it does not escape the decision the repo already made about normative content; it hides it.
+2. **The deck's own statement of the formula is defective.** Slide 57 gives
+   `S+E+C < 6 → QM` and `[7,8,9,10] → [A,B,C,D]`, leaving **sum = 6 undefined by either rule**.
+   Slide 61's worked example resolves it (S2+E1+C3 = 6 → QM), so the intent is `≤ 6`.
+   Transcribing slide 57 literally would ship that gap into a tool people are certified against.
+3. Reading the user's filled table has no such gap and cannot disagree with their own chain.
+
+The calculator therefore *teaches* the formula as the mnemonic it is — the deck's own framing,
+with the `≤ 6` corrected — while *computing* from `asil-table.yaml`. Where the two differ, the
+UI says so rather than picking a winner: a disagreement means the transcription is wrong, and
+that is worth surfacing loudly.
+
+## 3a. Content confidentiality (binding)
+
+The deck is **Volvo Trucks internal material** and `github.com/hrushi18/FuSa` is **public**.
+The deck carries `volvogroup.sharepoint.com` links (8 slides), an internal document server and
+SE-tool URL (slide 59), internal course codes and Navigator sign-ups (8 slides), WBS charge
+codes (slide 4), and FS-QDPR — Volvo's proprietary DIA implementation — with a supplier
+compliance matrix (slides 118–119).
+
+- **C1.** Authored content is **never committed**. `content/` is gitignored, exactly as
+  `_generated/` and `.env` already are.
+- **C2.** The repo ships `fusa/ui/content-sample/` — a small generic ISO 26262 course written
+  from scratch, owned by this project, so a fresh clone works out of the box.
+- **C3.** The server reads `FUSA_CONTENT_DIR` (default `<ROOT>/content/`) and falls back to the
+  shipped sample. Precedence is per-module id, so local content overrides a sample module.
+- **C4.** No internal URL, course code, WBS number, tool link or supplier-specific process name
+  enters the shipped sample. A CI test greps the sample for those patterns and fails on a hit.
+
+This mirrors what the repo already does everywhere else: structure is public, licensed or
+proprietary content stays the user's and stays local.
 
 ## 4. Architecture
 
@@ -82,16 +120,18 @@ fusa/ui/
         hara.js              HARA Builder
         trace.js             Traceability Lab           (reads /api/checks)
         validate.js          Validate My FUSA System    (reads /api/report, /api/checks)
-  content/              NEW  authored content, shipped as package data
+  content-sample/     NEW  generic course, committed, shipped as package data (C2)
     groups.json              the 12 nav groups: id, display title, order
     modules/*.json
     paths.json
     glossary.json
+
+<ROOT>/content/       NEW  the user's real content — GITIGNORED (C1), same layout
 ```
 
 `pyproject.toml` package-data widens from `"fusa.ui": ["static/*"]` to include
-`static/learn/*`, `static/learn/tools/*`, `content/*.json` and `content/modules/*.json`,
-or an installed copy serves a shell with no content.
+`static/learn/*`, `static/learn/tools/*`, `content-sample/*.json` and
+`content-sample/modules/*.json`, or an installed copy serves a shell with no content.
 
 New endpoints, all thin:
 
@@ -152,6 +192,42 @@ A CI test asserts every `work_products` entry exists in `config/agents.yaml` and
 
 **Pacing (§5.4 of the brief):** a card body is capped at 80 words, enforced by the same CI
 test. `alt` is mandatory on every `diagram` card.
+
+## 5a. What the deck actually contains
+
+143 slides, inventoried 2026-09-07:
+
+| Kind | Count | Becomes |
+|---|---|---|
+| Pure V-model diagram build-up (9–25, 44, 46–47, 63, 81–83, 89–91, 101–102, 120–121, 128–129, 131–133) | **36** | **One** progressive-reveal component, reused by every module to show where it sits. Not 36 cards. |
+| Volvo admin / logistics / training sign-ups | ~12 | Dropped (C4). |
+| Substantive teaching | ~65 | The cards. |
+| Exercises and worked examples | ~10 | HARA Builder scenarios and quiz items. |
+
+**Revised estimate: ~65 cards, not the brief's ~150.** M4 is roughly a third of the assumed
+size, because the deck's apparent bulk is one animated diagram.
+
+The 36-slide build-up is itself a teaching device worth keeping: it reveals the V-model one box
+at a time as the course advances. Implemented once as `vmodel.js` taking a "reveal up to phase
+N" argument, it replaces both those 36 slides and the brief's §5.1 "jump to V-model position"
+mini-diagram.
+
+**Coverage gaps.** The deck does not cover, and content must be sourced elsewhere:
+
+| Group | State in deck | Source instead |
+|---|---|---|
+| 8 · DFA & Traceability | One independence bullet (slide 77). Nothing on common-cause, cascading failures, or trace gaps | Author from the repo's own `_checklist-register/DFA.yaml` and `TRACEABILITY` work product |
+| 9 · Cybersecurity (21434) | One line naming the standard (slide 136) | Author from `_clause-register/iso21434.yaml` and the `TARA` / `SEC-SCAN` agents |
+| 4 · SPFM / LFM / PMHF | Named only as "hardware metrics" (slide 111) | **`fusa/tools/metrics.py`** — the repo already computes them, so cards teach the formulas the tool actually applies |
+| 11 · Validate My FUSA | Absent by nature | §8 |
+
+Group 8 being nearly absent is worth noting: it is the area the brief flags as *"why
+assessments fail"*, and the training material does not cover it. That is an argument for the
+platform existing, not a problem with it.
+
+**Deck material the brief's structure omits** and that should be kept: EUF and the
+screening / impact-analysis first step (slides 7–8), Verification Review vs Confirmation
+Review and where each sits (122, 131), and the V0–V7 test-level mapping (124, 126).
 
 ## 6. Progress model
 
@@ -269,7 +345,11 @@ content not derived from the user's deck.
 
 ## 13. Open
 
-- The deck. M4 cannot start without it.
-- Group 10's four role paths need the user's call on which modules belong to each; the brief's
-  sketch is a starting point, not a decision.
+- ~~The deck.~~ Supplied 2026-09-07; see §5a.
+- Group 10's four role paths: the deck's slide 134 defines three paths with named audiences
+  (SW/HW engineers + agile teams · EUF owners + system architects · product owners + FS
+  managers). That is a better basis than the brief's sketch, but it has **no assessor path**,
+  which the brief's Path D wants. Needs the user's call.
 - Whether the third HARA Builder scenario (steering assist) is authored by us or supplied.
+- Groups 8 and 9 have no deck source (§5a). Content there must be authored against the repo's
+  own registers, and needs review by someone who can vouch for it.
