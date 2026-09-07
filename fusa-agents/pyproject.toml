@@ -11,8 +11,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "httpx>=0.27"]
-ui = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0", "httpx>=0.27", "pypdf>=4.0"]
+ui = ["fastapi>=0.110", "uvicorn>=0.29", "reportlab>=4.0"]
 
 [project.scripts]
 fusa = "fusa.cli:main"

@@ -191,3 +191,107 @@ def test_the_printable_report_marks_model_written_rows(workspace):
     html = render_html(validate(Orchestrator(root=workspace, dry_run=True,
                                              author="model", reviewer="model")))
     assert "p-model" in html and "class='basis mixed'" in html
+
+
+# ---- PDF export -------------------------------------------------------------
+
+def test_md_rows_drops_the_separator_and_keeps_the_cells():
+    from fusa.report import md_rows
+    md = "| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |"
+    assert md_rows(md) == [["A", "B"], ["1", "2"], ["3", "4"]]
+
+
+reportlab = pytest.importorskip("reportlab")       # the PDF export is an optional extra
+pypdf = pytest.importorskip("pypdf")
+
+
+def pdf_text(data: bytes) -> str:
+    from io import BytesIO
+    from pypdf import PdfReader
+    return "\n".join(p.extract_text() or "" for p in PdfReader(BytesIO(data)).pages)
+
+
+def report_for(workspace, author="deterministic", reviewer="rules"):
+    from fusa.orchestrator import Orchestrator
+    from fusa.report import validate
+    return validate(Orchestrator(root=workspace, dry_run=True, author=author, reviewer=reviewer))
+
+
+def test_render_pdf_returns_a_real_pdf(workspace):
+    from fusa.pdf import render_pdf
+    data = render_pdf(report_for(workspace))
+    assert data.startswith(b"%PDF-")
+
+
+def test_the_pdf_carries_the_verdict_and_the_basis_summary(workspace):
+    from fusa.pdf import render_pdf
+    rep = report_for(workspace)
+    text = pdf_text(render_pdf(rep))
+    assert rep.verdict in text
+    assert "No language model produced or judged" in text     # rep.basis, the summary line
+
+
+def test_every_work_product_appears_in_the_pdf_evidence(workspace):
+    from fusa.pdf import render_pdf
+    rep = report_for(workspace)
+    text = pdf_text(render_pdf(rep))
+    for a in rep.work_products:
+        assert a.work_product in text
+
+
+def test_the_pdf_does_not_credit_a_model_that_never_ran(workspace):
+    from fusa.pdf import render_pdf
+    rep = report_for(workspace, author="deterministic", reviewer="rules")
+    assert rep.model not in pdf_text(render_pdf(rep))
+
+
+def test_the_pdf_names_the_model_when_one_ran(workspace):
+    from fusa.pdf import render_pdf
+    rep = report_for(workspace, author="model", reviewer="model")
+    assert rep.model in pdf_text(render_pdf(rep))
+
+
+def test_the_pdf_summarises_what_wrote_the_work_products(workspace):
+    """The summary block is the thing a PDF has that a CSV row does not."""
+    from fusa.pdf import render_pdf
+    text = pdf_text(render_pdf(report_for(workspace)))
+    assert "Summary" in text
+    for label in ("Written from your tables", "Read from an analyser", "Written by a model"):
+        assert label in text
+
+
+def test_release_blockers_are_listed_in_the_pdf(workspace):
+    from fusa.pdf import render_pdf
+    rep = report_for(workspace)
+    assert rep.reasons                                  # nothing has run: plenty to block on
+    assert "Release blockers" in pdf_text(render_pdf(rep))
+
+
+def test_report_pdf_endpoint_serves_a_downloadable_pdf(client):
+    r = client.get("/report.pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content.startswith(b"%PDF-")
+    assert "attachment" in r.headers["content-disposition"]
+
+
+def test_the_pdf_filename_records_the_mode_that_produced_it(client):
+    """A with-model and a without-model run must land as two files, not one overwritten."""
+    def name(author, reviewer):
+        client.post("/api/modes", json={"author": author, "reviewer": reviewer})
+        return client.get("/report.pdf").headers["content-disposition"]
+    without = name("deterministic", "rules")
+    with_model = name("model", "model")
+    assert "fusa-validation-report-deterministic-rules.pdf" in without
+    assert "fusa-validation-report-model-model.pdf" in with_model
+
+
+def test_report_pdf_without_reportlab_explains_the_extra(client, monkeypatch):
+    from fusa import pdf
+    def missing(_rep):
+        raise ModuleNotFoundError(pdf.INSTALL_HINT)
+    monkeypatch.setattr("fusa.ui.server.render_pdf", missing)
+    r = client.get("/report.pdf")
+    assert r.status_code == 503
+    assert "reportlab" in r.json()["detail"]
+

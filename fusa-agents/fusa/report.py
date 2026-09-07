@@ -130,6 +130,19 @@ def _basis(assessments, author: str, reviewer: str, orch) -> str:
 EVIDENCE_HEADER = ["Work product", "Agent", "Written by", "Status", "Gate", "Pending", "Review", "Open findings", "Verdict"]
 
 
+def md_rows(md: str) -> list[list[str]]:
+    """Cells of a markdown table, header first, separator dropped. Shared by every renderer
+    so the metrics and ASPICE tables cannot drift between the HTML and the PDF."""
+    out = []
+    for line in md.splitlines():
+        if not line.strip().startswith("|"):
+            continue
+        if set(line.replace("|", "").strip()) <= {"-", " ", ":"}:
+            continue
+        out.append([c.strip() for c in line.strip().strip("|").split("|")])
+    return out
+
+
 def _evidence_rows(rep: ValidationReport) -> list[list[str]]:
     rows = []
     for a in rep.work_products:
@@ -186,13 +199,9 @@ def render_html(rep: ValidationReport) -> str:
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     def md_table(md: str) -> str:
-        rows = [r for r in md.splitlines() if r.strip().startswith("|")]
         out = ["<table>"]
-        for i, r in enumerate(rows):
-            if set(r.replace("|", "").strip()) <= {"-", " ", ":"}:
-                continue
+        for i, cells in enumerate(md_rows(md)):
             tag = "th" if i == 0 else "td"
-            cells = [c.strip() for c in r.strip().strip("|").split("|")]
             out.append("<tr>" + "".join(f"<{tag}>{esc(c)}</{tag}>" for c in cells) + "</tr>")
         out.append("</table>")
         return "\n".join(out)

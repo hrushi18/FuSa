@@ -241,3 +241,49 @@ def test_the_panel_offers_both_runs_and_both_exports(client):
     for marker in ("Run without a model", "Run with a model", "/results.csv", "/checks.csv",
                    "Run the chain", "Results"):
         assert marker in html
+
+
+# ---- what to download once a run has finished -------------------------------
+
+def test_status_has_no_last_run_before_anything_has_run(client):
+    assert client.get("/api/status").json()["last_run"] is None
+
+
+def test_a_finished_run_is_recorded_with_the_mode_it_ran_in(client):
+    client.post("/api/run-all", json={"author": "deterministic", "reviewer": "rules"})
+    wait_idle(client)
+    last = client.get("/api/status").json()["last_run"]
+    assert last["author"] == "deterministic" and last["reviewer"] == "rules"
+    assert last["ok"] is True and last["finished"]
+    assert "run-all" in last["label"]
+
+
+def test_the_recorded_run_keeps_its_own_mode_after_the_mode_is_switched(client):
+    """A finished run must not be relabelled by a later settings change."""
+    client.post("/api/run-all", json={"author": "deterministic", "reviewer": "rules"})
+    wait_idle(client)
+    client.post("/api/modes", json={"author": "model", "reviewer": "model"})
+    last = client.get("/api/status").json()["last_run"]
+    assert (last["author"], last["reviewer"]) == ("deterministic", "rules")
+
+
+def test_a_run_that_errored_is_recorded_as_not_ok(client):
+    runner = client.app.state.runner
+    def boom(log):
+        raise RuntimeError("chain exploded")
+    runner.start("run-all (broken)", boom)
+    wait_idle(client)
+    assert client.get("/api/status").json()["last_run"]["ok"] is False
+
+
+def test_the_dashboard_offers_a_pdf_alongside_the_csv_exports(client):
+    html = client.get("/").text
+    for marker in ("/report.pdf", "/results.csv", "/checks.csv", "/report.xlsx"):
+        assert marker in html
+
+
+def test_the_dashboard_has_a_download_button_and_a_run_finished_card(client):
+    html = client.get("/").text
+    assert 'id="download"' in html                 # header: every format, any time
+    assert 'id="lastrun"' in html                  # left panel: what the finished run produced
+    assert "last_run" in html                      # fed from the run that actually finished

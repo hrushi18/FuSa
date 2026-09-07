@@ -57,6 +57,19 @@
   .why { font-size: 11px; color: var(--dim); line-height: 1.5; margin: 8px 0 0; }
 
   /* the primary choice: the colour of the mode you pick is the colour the board turns */
+  /* what the run that just finished produced, and what you can take away from it */
+  #lastrun:empty { display: none; }
+  #lastrun { border-bottom: 1px solid var(--line); padding: 14px 18px 16px; }
+  .lastrun { border: 1px solid var(--line); border-left: 3px solid var(--c-reviewed);
+             border-radius: 8px; padding: 10px 11px; background: var(--panel2); }
+  .lastrun.failed { border-left-color: var(--c-gate_failed); }
+  .lastrun .l-top { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; }
+  .lastrun .l-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c-reviewed); flex: none; }
+  .lastrun.failed .l-dot { background: var(--c-gate_failed); }
+  .lastrun .l-sub { color: var(--dim); font-size: 10px; line-height: 1.6; margin-top: 5px; }
+  .lastrun .l-buttons { display: flex; gap: 6px; margin-top: 9px; }
+  .lastrun .l-buttons button { flex: 1; padding: 6px 4px; font-size: 11px; }
+
   .mode { border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; margin-bottom: 9px;
           cursor: pointer; }
   .mode:hover { border-color: currentColor; }
@@ -164,6 +177,8 @@
        <em>who decided</em> each one — a table you wrote, a tool, a rule, or a person.</p>
   </div>
 
+  <div id="lastrun"></div>
+
   <div class="sec">
     <h2>Run the chain</h2>
     <p class="lede">Pick how the work products are written and reviewed, then run.</p>
@@ -217,6 +232,7 @@
   <button id="settings" title="Provider, model and API key">⚙ Model</button>
   <button id="templates" title="Download a blank input table">⬇ Template</button>
   <button id="inputs">⬆ Inputs</button>
+  <button id="download" title="Download the results of this run — CSV or PDF">⬇ Download</button>
   <button id="report">Report</button>
 </header>
 <div id="board"></div>
@@ -240,7 +256,7 @@ const PHASES = {1:"1 · Concept & Requirements", 2:"2 · System Analysis", 3:"3 
                 6:"6 · Safety Solution", 7:"7 · Verification & Validation"};
 const $ = s => document.querySelector(s);
 const api = (p, opt) => fetch(p, opt).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
-let logNext = 0, agents = [], checks = [], ready = null, filter = null;
+let logNext = 0, agents = [], checks = [], ready = null, lastRun = null, filter = null;
 
 function esc(s){ const d=document.createElement("div"); d.textContent=s??""; return d.innerHTML; }
 function openDrawer(title){ $("#d-title").textContent = title; $("#drawer").classList.add("open"); }
@@ -256,10 +272,47 @@ const PROV = {
 };
 const chip = k => `<span class="tag ${PROV[k].family}">${PROV[k].word}</span>`;
 
+// Every file this run can be taken away as. One list, so the header drawer, the Results
+// section and the run-finished card can never describe the same download differently.
+const EXPORTS = [
+  {url:"/report.pdf",  label:"Report (.pdf)",
+   sub:"the summary — verdict, what wrote each work product, blockers, evidence"},
+  {url:"/results.csv", label:"Results (.csv)",
+   sub:"the detail — one row per work product: gate, findings, who decided each check"},
+  {url:"/checks.csv",  label:"Checks (.csv)",
+   sub:"one row per checklist item and what decides it"},
+  {url:"/report.xlsx", label:"Validation report (.xlsx)",
+   sub:"summary, requirements and evidence as a workbook"},
+];
+const modeWords = (a, r) => a === "deterministic" && r === "rules" ? "no model"
+                          : a === "model" && r === "model" ? "with a model" : `${a}/${r}`;
+
+/** Save a file, taking its name from the server so the mode stamped on it is never guessed
+ *  here. A refused export (the PDF extra missing) lands in the run log, not a blank tab. */
+async function download(url){
+  try {
+    const r = await fetch(url);
+    if (!r.ok){
+      const body = await r.json().catch(() => ({}));
+      return logLine("[ui] download failed — " + (body.detail || `${url} returned ${r.status}`));
+    }
+    const name = /filename="?([^";]+)"?/.exec(r.headers.get("content-disposition") || "");
+    const href = URL.createObjectURL(await r.blob());
+    const a = Object.assign(document.createElement("a"), {href, download: name ? name[1] : ""});
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 10000);
+    logLine("[ui] downloaded " + (name ? name[1] : url));
+  } catch(e){ logLine("[ui] download failed — " + e); }
+}
+
 // ---- left panel ------------------------------------------------------------
 
 async function loadPanel(){
-  [ready, checks] = await Promise.all([api("/api/readiness"), api("/api/checks")]);
+  let status;
+  [ready, checks, status] = await Promise.all([
+    api("/api/readiness"), api("/api/checks"), api("/api/status")]);
+  lastRun = status.last_run;
+  drawLastRun();
   drawModes(); drawResults(); drawKeys(); drawReady(); drawSources(); drawChecks(); drawAttention();
 }
 
@@ -269,17 +322,45 @@ function totals(){
   return t;
 }
 
+function done(){
+  return checks.filter(w => ["reviewed","rework","gate_failed"].includes(w.status)).length;
+}
+
 function drawResults(){
-  const done = checks.filter(w => ["reviewed","rework","gate_failed"].includes(w.status)).length;
   $("#results").innerHTML =
-    row("off", "⬇", "Results (.csv)",
-        `${done} of ${checks.length} work products · ${ready.author}/${ready.reviewer}`, null,
-        () => window.open("/results.csv", "_blank"))
-  + row("off", "⬇", "Checks (.csv)", "every check and what decides it", null,
-        () => window.open("/checks.csv", "_blank"))
-  + row("off", "⬇", "Validation report (.xlsx)", "summary, requirements, evidence", null,
-        () => window.open("/report.xlsx", "_blank"))
+    EXPORTS.map(x => row("off", "⬇", x.label,
+                         x.url === "/results.csv"
+                           ? `${done()} of ${checks.length} work products · ${ready.author}/${ready.reviewer}`
+                           : x.sub,
+                         null, () => download(x.url))).join("")
   + row("off", "▤", "ASPICE coverage", "base practices covered by these work products", null, openAspice);
+}
+
+/** What the run that just finished produced, and what you can take away from it. Reads the
+ *  finished run's own mode — switching the mode afterwards must not relabel it. */
+function drawLastRun(){
+  const el = $("#lastrun");
+  if (!lastRun){ el.innerHTML = ""; return; }
+  const stale = lastRun.author !== ready.author || lastRun.reviewer !== ready.reviewer;
+  const verdict = !lastReport ? "" :
+    ` · <span style="color:var(--c-${lastReport.verdict === "RELEASABLE" ? "reviewed" : "gate_failed"})">`
+    + `${lastReport.verdict === "RELEASABLE" ? "RELEASABLE" : "NOT RELEASABLE · " + lastReport.reasons.length}</span>`;
+  el.innerHTML = `
+    <div class="lastrun ${lastRun.ok ? "" : "failed"}">
+      <div class="l-top"><span class="l-dot"></span>
+        <span>Run finished${lastRun.ok ? "" : " with an error"} · ${esc(modeWords(lastRun.author, lastRun.reviewer))}</span></div>
+      <div class="l-sub">${done()} of ${checks.length} work products${verdict}<br>
+        ${esc(lastRun.finished.replace("T", " ").replace("+00:00", " UTC"))}</div>
+      ${stale ? `<div class="l-sub" style="color:var(--c-blocked)">The mode has been switched to
+        ${esc(modeWords(ready.author, ready.reviewer))} since. Exports are stamped with that —
+        re-run to make the file match this run.</div>` : ""}
+      <div class="l-buttons">
+        <button id="l-pdf">⬇ PDF report</button>
+        <button id="l-csv">⬇ Results CSV</button>
+      </div>
+    </div>`;
+  $("#l-pdf").onclick = () => download("/report.pdf");
+  $("#l-csv").onclick = () => download("/results.csv");
 }
 
 function drawKeys(){
@@ -519,6 +600,7 @@ async function loadVerdict(){
     const ok = lastReport.verdict === "RELEASABLE";
     $("#verdict").textContent = ok ? "RELEASABLE" : `NOT RELEASABLE · ${lastReport.reasons.length}`;
     $("#verdict").className = "badge " + (ok ? "rel" : "norel");
+    if (lastRun) drawLastRun();          // the card carries the verdict too — keep it live
   } catch(e){ /* server restarting */ }
 }
 $("#verdict").onclick = () => {
@@ -625,6 +707,28 @@ async function uploadCsv(file){
       .forEach(d => logLine("[ui] upload rejected — " + d));
   }
 }
+$("#download").onclick = () => {
+  const mode = `${ready.author}-${ready.reviewer}`;
+  openDrawer("Download this run");
+  $("#d-body").innerHTML = `
+    <div class="kv">Everything below is built from the status board as it stands now, and stamped
+      with the mode that produced it — <b>${esc(modeWords(ready.author, ready.reviewer))}</b>. Run
+      the chain each way and the two sets of files sit side by side instead of overwriting one
+      another, so they diff line for line.</div>
+    <h3>Files</h3>` +
+    EXPORTS.map(x => `<div class="row off" data-url="${x.url}" tabindex="0">
+      <span class="mark">⬇</span>
+      <span>${esc(x.label)}<span class="sub">${esc(x.sub)}</span></span></div>`).join("") + `
+    <h3>Also</h3>
+    <div class="kv">The same report as a page you can read or print:
+      <a href="/report" target="_blank" style="color:var(--accent)">open the printable report</a>.</div>`;
+  $("#d-body").querySelectorAll(".row[data-url]").forEach(el => {
+    const go = () => download(el.dataset.url);
+    el.onclick = go;
+    el.onkeydown = e => { if (e.key === "Enter") go(); };
+  });
+};
+
 $("#report").onclick = async () => {
   try { const r = await api("/api/report", {method:"POST"}); logLine("[ui] validation report → " + r.markdown_path); }
   catch(e){ logLine("[ui] " + (e.detail || "report error")); }
@@ -695,7 +799,9 @@ async function poll(){
     $("#logdot").className = l.running ? "on" : "";
     $("#logstate").textContent = l.running ? "running…" : "idle";
     if (l.lines.length || wasRunning !== l.running) { await refresh(); await loadPanel(); }
-    if (wasRunning && !l.running) logLine("[ui] run finished — Results (.csv) in the left panel");
+    if (wasRunning && !l.running)
+      logLine("[ui] run finished — download the PDF report or the results CSV from the card at the "
+              + "top of the left panel, or ⬇ Download in the header");
     wasRunning = l.running;
   } catch(e){ /* server restarting */ }
   setTimeout(poll, 700);

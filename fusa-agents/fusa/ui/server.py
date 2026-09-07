@@ -20,6 +20,7 @@
     GET  /api/report          live release validation (verdict + evidence)
     POST /api/report          same, and writes _generated/VALIDATION-REPORT.md
     GET  /report              printable HTML validation report (print -> PDF)
+    GET  /report.pdf          the same report as a PDF file, named for the mode that produced it
     POST /api/run/{agent-id}  run one agent in the background (409 while busy)
     POST /api/run-all         walk the dependency sequence in the background
 """
@@ -39,6 +40,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from ..agents.llm import PROVIDERS
 from ..models import Status
 from ..orchestrator import Orchestrator, UnknownAgent
+from ..pdf import render_pdf
 from ..report import render_html, validate, write_report
 from ..tools import reqtable
 
@@ -69,11 +71,15 @@ def validate_fmeda_csv(text: str) -> tuple[int, list[str]]:
 
 
 class Runner:
-    """One background run at a time; log lines buffered for the dashboard to poll."""
+    """One background run at a time; log lines buffered for the dashboard to poll.
+
+    `last` is what the finished run was, not what the settings say now — the dashboard offers
+    its downloads under that mode, and switching the mode afterwards must not relabel it."""
 
     def __init__(self):
         self.lock = threading.Lock()
         self.lines: list[str] = []
+        self.last: dict | None = None
 
     @property
     def busy(self) -> bool:
@@ -82,18 +88,22 @@ class Runner:
     def log(self, *parts) -> None:
         self.lines.append(" ".join(str(p) for p in parts))
 
-    def start(self, label: str, fn) -> None:
+    def start(self, label: str, fn, author: str = "", reviewer: str = "") -> None:
         if not self.lock.acquire(blocking=False):
             raise HTTPException(status_code=409, detail="a run is already in progress")
 
         def work():
+            ok = True
             try:
                 self.log(f"=== {label} ===")
                 fn(self.log)
             except Exception as e:                       # surface, never kill the server
+                ok = False
                 self.log(f"[error] {e!r}")
             finally:
                 self.log(f"=== {label} finished ===")
+                self.last = {"label": label, "author": author, "reviewer": reviewer, "ok": ok,
+                             "finished": datetime.now(timezone.utc).isoformat(timespec="seconds")}
                 self.lock.release()
 
         threading.Thread(target=work, daemon=True).start()
@@ -159,7 +169,7 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
 
     @app.get("/api/status")
     def status():
-        return {"running": runner.busy,
+        return {"running": runner.busy, "last_run": runner.last,
                 "records": {s.work_product: record(s.work_product) for s in orch.plan()}}
 
     @app.get("/api/logs")
@@ -197,7 +207,8 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
         path = orch.root / "input" / "fmeda-failure-modes.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-        runner.start("run-all (new FMEDA input)", lambda log: orch.run_all(log=log))
+        runner.start("run-all (new FMEDA input)", lambda log: orch.run_all(log=log),
+                     author=orch.author_kind, reviewer=orch.reviewer_kind)
         return {"saved": str(path), "rows": rows, "started": "run-all"}
 
     @app.get("/api/template/requirements")
@@ -232,7 +243,8 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
         path.write_bytes(body)
         wp_path = orch.reg.generated.write("SYS-REQ", reqtable.to_work_product(rows))
         orch.reg.process.update("SYS-REQ", "reqtable-import", status=Status.GATE_PASSED, path=str(wp_path))
-        runner.start("run-all (new requirements input)", lambda log: orch.run_all(log=log))
+        runner.start("run-all (new requirements input)", lambda log: orch.run_all(log=log),
+                     author=orch.author_kind, reviewer=orch.reviewer_kind)
         return {"saved": str(path), "rows": len(rows), "fusa_relevant": len(reqtable.fusa_rows(rows)),
                 "id_notes": notes, "work_product": "SYS-REQ", "started": "run-all"}
 
@@ -256,13 +268,26 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
     def report_page(asil: str = "B"):
         return HTMLResponse(render_html(validate(orch, asil=asil.upper())))
 
+    @app.get("/report.pdf")
+    def report_pdf(asil: str = "B"):
+        """The report as a file to keep — summary, blockers, evidence. Named for the mode that
+        produced it, so a run with a model and a run without one are two files side by side."""
+        try:
+            data = render_pdf(validate(orch, asil=asil.upper()))
+        except ModuleNotFoundError as e:                # the optional extra, not a server fault
+            raise HTTPException(status_code=503, detail=str(e))
+        return Response(data, media_type="application/pdf", headers={
+            "content-disposition": "attachment; filename="
+            f'"fusa-validation-report-{orch.author_kind}-{orch.reviewer_kind}.pdf"'})
+
     @app.post("/api/run/{agent_id}", status_code=202)
     def run(agent_id: str):
         try:
             orch.resolve(agent_id)          # disabled/unknown fails here, not in the worker thread
         except UnknownAgent as e:
             raise HTTPException(status_code=404, detail=str(e))
-        runner.start(f"run {agent_id}", lambda log: orch.run(agent_id, log=log))
+        runner.start(f"run {agent_id}", lambda log: orch.run(agent_id, log=log),
+                     author=orch.author_kind, reviewer=orch.reviewer_kind)
         return {"started": agent_id}
 
     @app.post("/api/run-all", status_code=202)
@@ -275,7 +300,8 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
             if data.get("author") or data.get("reviewer"):
                 orch.set_modes(author=data.get("author"), reviewer=data.get("reviewer"))
         modes = f"{orch.author_kind} authoring · {orch.reviewer_kind} review"
-        runner.start(f"run-all ({modes})", lambda log: orch.run_all(log=log))
+        runner.start(f"run-all ({modes})", lambda log: orch.run_all(log=log),
+                     author=orch.author_kind, reviewer=orch.reviewer_kind)
         return {"started": "run-all", "author": orch.author_kind, "reviewer": orch.reviewer_kind}
 
     # ---- what a newcomer needs to see: what is ready, how content is made, how it is checked ----
