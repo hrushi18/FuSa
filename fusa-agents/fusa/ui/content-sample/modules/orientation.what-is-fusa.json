@@ -1,0 +1,40 @@
+{
+  "id": "orientation.what-is-fusa",
+  "group": "0",
+  "order": 1,
+  "title": "What is Functional Safety?",
+  "vmodel_position": "concept",
+  "clauses": ["26262-1:1"],
+  "cards": [
+    {"type": "concept", "title": "The scope is narrower than \"safety\"",
+     "body": "Functional safety covers hazards caused by electrical and electronic systems behaving incorrectly. A brake controller that releases pressure when it should hold is in scope. A battery that catches fire on its own is not, unless a malfunction of an E/E system caused it."},
+    {"type": "why", "title": "Why the boundary matters",
+     "body": "Teams lose time arguing about hazards the standard never asked them to analyse. Knowing the boundary tells you which risks belong in this process and which belong to another discipline."},
+    {"type": "diagram", "asset": "vmodel", "reveal": "concept",
+     "alt": "The development V-model, with the concept phase highlighted. Work descends from item definition through hazard analysis and the safety concepts, then rises through integration, validation and assessment."}
+  ],
+  "inline_check": {
+    "prompt": "A wiring harness overheats because a control unit commands a valve to stay open indefinitely. In scope?",
+    "options": ["No — overheating is a thermal hazard", "Yes — a malfunction of an E/E system caused it"],
+    "answer": 1,
+    "explanation": "The heat is the harm, but the cause is E/E malfunctioning behaviour, which is exactly what this process addresses."
+  },
+  "quiz": [
+    {"id": "q1", "type": "single",
+     "prompt": "Which of these is outside the scope of functional safety?",
+     "options": ["A sensor reporting a value it never measured",
+                 "A corroding bracket failing under load with no E/E involvement",
+                 "An actuator moving without being commanded"],
+     "answer": 1, "card_ref": 0,
+     "explanation": "No electrical or electronic malfunction is involved, so it belongs to another safety discipline."},
+    {"id": "q2", "type": "multi",
+     "prompt": "Which two statements are true of functional safety?",
+     "options": ["It concerns malfunctioning behaviour of E/E systems",
+                 "It replaces the need for general product safety work",
+                 "It covers interactions between E/E systems"],
+     "answer": [0, 2], "card_ref": 0,
+     "explanation": "It sits alongside other safety work rather than replacing it, and interactions between systems are explicitly included."}
+  ],
+  "work_products": [],
+  "checklist_ref": null
+}

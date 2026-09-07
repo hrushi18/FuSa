@@ -1,0 +1,47 @@
+{
+  "id": "concept.hara",
+  "group": "2",
+  "order": 1,
+  "title": "Hazard Analysis & Risk Assessment",
+  "vmodel_position": "concept",
+  "clauses": ["26262-3:6"],
+  "cards": [
+    {"type": "concept", "title": "What a HARA produces",
+     "body": "A HARA takes the item definition and produces safety goals. In between it names what the item does, asks how each activity could go wrong, places those failures in driving situations, rates the resulting risk, and states the goal that would prevent each one."},
+    {"type": "concept", "title": "Hazard, situation, hazardous event",
+     "body": "A hazard is the item misbehaving. A situation is where the vehicle is when it happens. A hazardous event is the pair. Braking failing to engage is a hazard; failing to engage while children cross the road is a hazardous event, and only the pair can be rated."},
+    {"type": "example", "example_ref": "generic-brakes", "title": "Worked: service brakes",
+     "body": "Activity: deceleration. Guideword: omission. Hazard: service brakes do not engage. Situation: approaching a crossing. Hazardous event: brakes fail to engage as pedestrians cross. Safety goal: omission of service braking shall not occur."},
+    {"type": "diagram", "asset": "vmodel", "reveal": "hara",
+     "alt": "The V-model with hazard analysis highlighted, immediately after item definition and before the functional safety concept."}
+  ],
+  "inline_check": {
+    "prompt": "\"Steering assist applies torque that was not requested.\" What is this?",
+    "options": ["A hazardous event", "A hazard", "A safety goal"],
+    "answer": 1,
+    "explanation": "It describes the item misbehaving but names no situation, so it is a hazard and not yet a hazardous event."
+  },
+  "quiz": [
+    {"id": "q1", "type": "single",
+     "prompt": "What is the input to a HARA?",
+     "options": ["The technical safety concept", "The item definition", "The hardware metrics report"],
+     "answer": 1, "card_ref": 0,
+     "explanation": "The HARA reads the item definition; everything downstream depends on its safety goals."},
+    {"id": "q2", "type": "single",
+     "prompt": "Which is a well-formed safety goal for the hazard \"unintended deployment\"?",
+     "options": ["The sensor shall be redundant",
+                 "Unintended deployment shall not occur",
+                 "Deployment shall complete within 30 ms"],
+     "answer": 1, "card_ref": 2,
+     "explanation": "A safety goal states the hazard must not happen. Naming a sensor is a solution, and a timing figure belongs to a lower-level requirement."},
+    {"id": "q3", "type": "single",
+     "prompt": "Why can a hazard not be rated on its own?",
+     "options": ["Because severity depends on the situation it occurs in",
+                 "Because hazards are always ASIL D",
+                 "Because rating happens in the technical safety concept"],
+     "answer": 0, "card_ref": 1,
+     "explanation": "Exposure and severity both depend on where and when the failure happens, which is what the situation supplies."}
+  ],
+  "work_products": ["HARA"],
+  "checklist_ref": "HARA"
+}

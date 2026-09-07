@@ -1,0 +1,14 @@
+[
+  {"id": "0",  "order": 0,  "title": "Orientation"},
+  {"id": "1",  "order": 1,  "title": "Functional Safety Management"},
+  {"id": "2",  "order": 2,  "title": "Concept Phase"},
+  {"id": "3",  "order": 3,  "title": "System — Technical Safety Concept"},
+  {"id": "4",  "order": 4,  "title": "Hardware Safety"},
+  {"id": "5",  "order": 5,  "title": "Software Safety"},
+  {"id": "6",  "order": 6,  "title": "Integration, Testing & Validation"},
+  {"id": "7",  "order": 7,  "title": "Assessment & Safety Case"},
+  {"id": "8",  "order": 8,  "title": "Dependent Failure Analysis & Traceability"},
+  {"id": "9",  "order": 9,  "title": "Cybersecurity Bridge"},
+  {"id": "10", "order": 10, "title": "Role-Based Paths"},
+  {"id": "11", "order": 11, "title": "Validate My FuSa System"}
+]

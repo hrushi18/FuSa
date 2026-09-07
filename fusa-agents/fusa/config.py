@@ -71,3 +71,9 @@ AUTHOR = os.environ.get("FUSA_AUTHOR", "model")
 
 # Strict gating: a downstream agent may not start while an upstream has PENDING markers.
 STRICT_PENDING = os.environ.get("FUSA_STRICT_PENDING", "0") == "1"
+
+# Learning platform. Content lives outside the repo by default: it may derive from licensed or
+# employer-internal training material, and this repository is public. The shipped sample is
+# generic and owned by this project — see docs/superpowers/specs for the constraint it carries.
+CONTENT_DIR = Path(os.environ.get("FUSA_CONTENT_DIR", ROOT / "content"))
+LEARN_PASS_MARK = float(os.environ.get("FUSA_LEARN_PASS_MARK", "0.8"))

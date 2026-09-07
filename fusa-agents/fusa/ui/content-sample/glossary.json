@@ -1,0 +1,10 @@
+{
+  "ASIL": "Automotive Safety Integrity Level — the risk classification assigned to a hazardous event, from QM through A to D.",
+  "Item": "The system or combination of systems the safety lifecycle is applied to.",
+  "Safety Goal": "The top-level safety requirement for an item, derived from a hazardous event.",
+  "FSR": "Functional safety requirement — derived from a safety goal, allocated to the preliminary architecture.",
+  "TSR": "Technical safety requirement — the solution-oriented refinement of an FSR.",
+  "HSI": "Hardware-software interface specification.",
+  "DFA": "Dependent failure analysis — looks for common-cause and cascading failures between elements assumed independent.",
+  "Work product": "A document or dataset the lifecycle requires as evidence."
+}
