@@ -58,6 +58,7 @@ def test_transient_failures_are_not_swallowed_as_config_errors(monkeypatch):
         return httpx.Response(503, text="upstream busy", request=httpx.Request("POST", url))
 
     monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr("time.sleep", lambda s: None)     # a 5xx is retried; don't wait it out here
     llm = LLM(provider="groq", dry_run=False, api_key="gsk_ok")
     try:
         llm.complete("s", "u")

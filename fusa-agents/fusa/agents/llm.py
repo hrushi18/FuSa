@@ -33,6 +33,21 @@ class LLMResponseError(RuntimeError):
     Named so a caller can tell it from a transport failure."""
 
 
+class LLMRateLimitError(RuntimeError):
+    """A 429 that waiting did not clear — a per-minute limit that outlasted our retries, or a
+    daily cap no retry can clear. Carries the provider's own wording: 'requests per minute'
+    and 'tokens per day' need different reactions from the person reading the log, and only
+    the provider knows which one was hit. A busy upstream (5xx) is retried the same way but
+    keeps its own HTTPStatusError — it is not a limit, and calling it one would mislead."""
+
+
+# One run-all is ~30 calls back to back, so a shared endpoint's per-minute limit is the
+# expected path rather than an edge case. Ride out a short one; refuse to sit on a long one.
+MAX_RETRIES = 3
+MAX_RETRY_WAIT = 60.0        # a longer Retry-After means a cap this run cannot outlast
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+
 PROVIDERS = {
     "anthropic": {"label": "Anthropic (cloud, or local via ANTHROPIC_BASE_URL)",
                   "default_model": "claude-sonnet-5", "api": "anthropic",
@@ -67,6 +82,7 @@ class LLM:
         self.max_tokens = max_tokens or config.MAX_TOKENS
         self.api_key = api_key
         self._client = None
+        self.on_retry: Callable[[str], None] | None = None   # set per run so waits reach the log
 
     def configure(self, *, provider: str | None = None, model: str | None = None,
                   api_key: str | None = None) -> None:
@@ -114,7 +130,7 @@ class LLM:
             return stub()
         try:
             text = self._call(system, user)
-        except (LLMConfigError, LLMResponseError):
+        except (LLMConfigError, LLMResponseError, LLMRateLimitError):
             raise
         except Exception as exc:
             friendly = self._as_config_error(exc)
@@ -145,6 +161,58 @@ class LLM:
         )
         return "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
 
+    @staticmethod
+    def _provider_said(r) -> str:
+        """The provider's own explanation of a refusal. Groq and OpenAI both put it in
+        `error.message`; anything else falls back to the raw body. Losing this is what turns
+        'you are over the tokens-per-minute limit' into a link to an MDN page."""
+        try:
+            body = r.json()
+        except Exception:
+            return (getattr(r, "text", "") or "").strip()[:300]
+        err = body.get("error") if isinstance(body, dict) else None
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"]).strip()[:300]
+        return (str(err) if err else json.dumps(body))[:300]
+
+    def _retry_wait(self, r, attempt: int) -> float:
+        """How long the provider asked us to wait, else exponential backoff."""
+        header = (r.headers or {}).get("retry-after") if hasattr(r, "headers") else None
+        if header:
+            try:
+                return float(header)
+            except (TypeError, ValueError):     # HTTP-date form: fall through to backoff
+                pass
+        return float(2 ** attempt)
+
+    def _post_with_retry(self, url: str, *, headers: dict, payload: dict):
+        """POST, riding out a rate limit or a blip. A refused key or model is not retried —
+        no amount of waiting fixes it — and neither is a wait longer than MAX_RETRY_WAIT,
+        which means a cap this run cannot outlast."""
+        import time
+
+        import httpx
+        for attempt in range(MAX_RETRIES + 1):
+            r = httpx.post(url, headers=headers, json=payload, timeout=300.0)
+            if r.status_code not in RETRY_STATUSES:
+                r.raise_for_status()            # 4xx becomes LLMConfigError upstream
+                return r
+            said = self._provider_said(r)
+            wait = self._retry_wait(r, attempt)
+            if attempt == MAX_RETRIES or wait > MAX_RETRY_WAIT:
+                if r.status_code != 429:        # a busy upstream is not a rate limit: say so as itself
+                    r.raise_for_status()
+                why = (f"asked for {wait:.0f}s, longer than the {MAX_RETRY_WAIT:.0f}s this run "
+                       f"will wait" if wait > MAX_RETRY_WAIT else
+                       f"still limited after {attempt + 1} attempts")
+                raise LLMRateLimitError(
+                    f"provider '{self.provider}' is rate limiting model '{self.model}' "
+                    f"({why}) — {said}")
+            if self.on_retry:
+                self.on_retry(f"{self.provider} returned {r.status_code}; "
+                              f"retrying in {wait:.0f}s ({said[:120]})")
+            time.sleep(wait)
+
     def _complete_openai_chat(self, system: str, user: str) -> str:
         """OpenAI-compatible chat completions (Groq, OpenAI, Gemini).
         httpx comes with the anthropic SDK."""
@@ -152,17 +220,14 @@ class LLM:
         spec = PROVIDERS[self.provider]
         base = {"groq": config.GROQ_BASE_URL, "openai": config.OPENAI_BASE_URL,
                 "gemini": config.GEMINI_BASE_URL}[self.provider]
-        import httpx
-        r = httpx.post(
+        r = self._post_with_retry(
             base.rstrip("/") + "/chat/completions",
             headers={"authorization": f"Bearer {key}"},
-            json={"model": self.model,
-                  spec.get("max_tokens_param", "max_tokens"): self.max_tokens,
-                  "messages": [{"role": "system", "content": system},
-                               {"role": "user", "content": user}]},
-            timeout=300.0,
+            payload={"model": self.model,
+                     spec.get("max_tokens_param", "max_tokens"): self.max_tokens,
+                     "messages": [{"role": "system", "content": system},
+                                  {"role": "user", "content": user}]},
         )
-        r.raise_for_status()
         try:
             body = r.json()
         except ValueError:

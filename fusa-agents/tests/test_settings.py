@@ -97,6 +97,7 @@ def test_openai_style_provider_calls_its_endpoint(monkeypatch, provider, model, 
     seen = {}
 
     class FakeResponse:
+        status_code = 200
         def raise_for_status(self): pass
         def json(self): return {"choices": [{"message": {"content": "  hello  "}}]}
 

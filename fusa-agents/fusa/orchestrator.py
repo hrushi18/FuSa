@@ -104,6 +104,8 @@ class Orchestrator:
         spec, agent = self.resolve(agent_id)
         wp = spec.work_product
         proc = self.reg.process
+        # a rate limit waited out in silence looks like a hung run; say so while it waits
+        self.llm.on_retry = lambda msg: log(f"[{agent_id}]   {msg}")
 
         blockers = self.gating(spec)
         if blockers and not force:

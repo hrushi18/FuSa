@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         print(metrics.render(metrics.compute(rows), a.asil.upper()))
         return 0
 
-    from .agents.llm import LLMConfigError, LLMResponseError
+    from .agents.llm import LLMConfigError, LLMRateLimitError, LLMResponseError
     from .orchestrator import Orchestrator, UnknownAgent
     orch = Orchestrator(dry_run=a.dry_run or None, strict_pending=a.strict or None, reviewer=a.reviewer, author=a.author)
     if orch.reg.process.load_warning:
@@ -72,6 +72,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except LLMResponseError as e:
         print(f"fusa: {e}", file=sys.stderr)
+        return 3
+    except LLMRateLimitError as e:                   # transient: the limit, not the setup, is wrong
+        print(f"fusa: {e}", file=sys.stderr)
+        print("fusa: one run-all is ~30 calls back to back — a per-minute limit is easy to hit. "
+              "Wait for the window to reset, raise the limit, or lower FUSA_MAX_TOKENS "
+              f"(currently {config.MAX_TOKENS}).", file=sys.stderr)
+        print("fusa: --author deterministic --reviewer rules runs the whole chain with no model "
+              "at all.", file=sys.stderr)
         return 3
     except LLMConfigError as e:                      # setup problem: one line, not a stack trace
         print(f"fusa: {e}", file=sys.stderr)
