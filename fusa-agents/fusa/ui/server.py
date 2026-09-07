@@ -23,6 +23,10 @@
     GET  /report.pdf          the same report as a PDF file, named for the mode that produced it
     POST /api/run/{agent-id}  run one agent in the background (409 while busy)
     POST /api/run-all         walk the dependency sequence in the background
+    GET  /learn               the learning platform shell
+    GET  /api/learn/content   course bundle (groups, modules, paths, glossary) + rule violations
+    GET  /api/learn/progress  this learner's progress record
+    POST /api/learn/progress  record cards seen or a quiz score for one module
 """
 from __future__ import annotations
 
@@ -37,7 +41,10 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
+from .. import config
 from ..agents.llm import PROVIDERS
+from ..learn import ContentRegistry, ProgressStore
+from ..learn.rules import check_bundle
 from ..models import Status
 from ..orchestrator import Orchestrator, UnknownAgent
 from ..pdf import render_pdf
@@ -47,6 +54,7 @@ from ..tools import reqtable
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 STATIC = Path(__file__).parent / "static"
+CONTENT_SAMPLE = Path(__file__).parent / "content-sample"
 FMEDA_COLUMNS = reqtable.FMEDA_COLUMNS        # one home for the column registry
 
 
@@ -116,6 +124,12 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
     app = FastAPI(title="FuSa Agent Framework")
     app.state.orchestrator = orch
     app.state.runner = runner
+
+    content = ContentRegistry(CONTENT_SAMPLE, config.CONTENT_DIR)
+    progress = ProgressStore(orch.root / "_generated" / "learning-progress.json",
+                             pass_mark=config.LEARN_PASS_MARK)
+    app.state.content = content
+    app.state.progress = progress
 
     def record(wp: str) -> dict | None:
         r = orch.reg.process.get(wp)
@@ -456,6 +470,39 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
         path.write_text(header + "table:\n" + "".join(
             f'  {k}: "{v}"\n' for k, v in data["table"].items()), encoding="utf-8")
         return {"saved": str(path), "filled": sum(1 for v in data["table"].values() if str(v).strip())}
+
+    @app.get("/api/learn/content")
+    def learn_content():
+        """The whole course in one payload, with its own rule violations attached — a course
+        that breaks its rules should say so in the UI rather than render half of itself."""
+        wps = {s.work_product for s in orch.specs}
+        checklists = {p.stem for p in orch.reg.checklists.path.glob("*.yaml")}
+        try:
+            bundle = content.bundle()
+        except ValueError as e:                    # a malformed content file, named
+            raise HTTPException(status_code=500, detail=str(e))
+        return bundle | {"content_errors": check_bundle(content, wps, checklists),
+                         "pass_mark": config.LEARN_PASS_MARK}
+
+    @app.get("/api/learn/progress")
+    def learn_progress():
+        return {"modules": progress.summary(), "pass_mark": config.LEARN_PASS_MARK}
+
+    @app.post("/api/learn/progress")
+    async def learn_progress_post(request: Request):
+        data = await request.json()
+        mid = (data.get("module_id") or "").strip()
+        if not content.module(mid):
+            raise HTTPException(status_code=404, detail=f"no such module: {mid!r}")
+        score = data.get("score")
+        if score is not None and not 0.0 <= float(score) <= 1.0:
+            raise HTTPException(status_code=400, detail="score must be between 0 and 1")
+        return progress.record(mid, score=None if score is None else float(score),
+                               cards_seen=data.get("cards_seen"))
+
+    @app.get("/learn")
+    def learn_page():
+        return FileResponse(STATIC / "learn" / "index.html")
 
     @app.get("/")
     def index():
