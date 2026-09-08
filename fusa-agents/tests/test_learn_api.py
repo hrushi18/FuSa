@@ -149,3 +149,14 @@ def test_a_course_that_fails_to_load_says_so_instead_of_showing_a_blank_page(cli
     js = client.get("/static/learn/app.js").text
     assert "load()" in js and ".catch(" in js
     assert "banner" in js
+
+
+def test_a_malformed_scenario_file_names_itself_instead_of_blanking_the_course(client, workspace):
+    """The course is one payload, so an unnamed 500 here is an empty page with no explanation —
+    the same failure the module loader already takes trouble to avoid."""
+    d = workspace / "content" / "scenarios"
+    d.mkdir(parents=True)
+    (d / "hara.json").write_text("{ not json", encoding="utf-8")
+    r = client.get("/api/learn/content")
+    assert r.status_code == 500
+    assert "hara.json" in r.json()["detail"]

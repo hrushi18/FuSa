@@ -80,6 +80,9 @@
   .wp { font-size: 11px; color: var(--dim); margin-top: 18px;
         border-top: 1px solid var(--line); padding-top: 12px; }
   .wp code { color: var(--p-machine); }
+  /* deliberately not `.tool` — that is the calculator's three-column grid, and a lesson
+     card wearing it renders in columns with its launch button orphaned. */
+  .card.tool-card { border-left: 3px solid var(--accent); }
   .tool-launch { display: inline-block; margin-top: 10px; padding: 7px 16px;
       background: var(--panel2); border: 1px solid var(--accent); border-radius: 6px;
       color: var(--accent); text-decoration: none; font-size: 12px; }

@@ -485,11 +485,13 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
         wps = {s.work_product for s in orch.specs}
         checklists = {p.stem for p in orch.reg.checklists.path.glob("*.yaml")}
         try:
+            # check_bundle reads the scenario files too, so it belongs under the same guard:
+            # outside it, one malformed scenario is an unnamed 500 and a blank course.
             bundle = content.bundle()
+            errors = check_bundle(content, wps, checklists)
         except ValueError as e:                    # a malformed content file, named
             raise HTTPException(status_code=500, detail=str(e))
-        return bundle | {"content_errors": check_bundle(content, wps, checklists),
-                         "pass_mark": config.LEARN_PASS_MARK}
+        return bundle | {"content_errors": errors, "pass_mark": config.LEARN_PASS_MARK}
 
     @app.get("/api/learn/progress")
     def learn_progress():

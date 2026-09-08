@@ -16,7 +16,7 @@ function cardHtml(card) {
   if (card.type === "tool") {
     // The launch is a plain hash link — the router already handles #/tool/<id>, so no
     // click handler needs writing here, and the back button works like everywhere else.
-    return `<div class="card tool">
+    return `<div class="card tool-card">
       <span class="kind">${KIND.tool}</span>
       ${card.title ? `<h3>${esc(card.title)}</h3>` : ""}
       <p>${esc(card.body)}</p>

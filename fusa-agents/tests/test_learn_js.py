@@ -340,3 +340,15 @@ def test_the_asil_harness_fails_when_the_calculator_derives_an_answer(tmp_path):
     (broken / "tools" / "asil.js").write_text(src, encoding="utf-8")
     got = run_asil(broken)
     assert badge_of(got["unfilled"]) is not None, "a derived answer went unnoticed"
+
+
+def test_a_lesson_card_does_not_borrow_a_grid_class_from_another_component():
+    """`.tool` is the calculator's three-column layout. A lesson card wearing that class renders
+    in three columns with its launch button orphaned — confirmed on screen before this test."""
+    css = (LEARN / "index.html").read_text(encoding="utf-8")
+    assert "grid-template-columns" in css, "wrong stylesheet — this test would pass vacuously"
+    module_js = (LEARN / "module.js").read_text(encoding="utf-8")
+    grid_classes = re.findall(r"\.([a-z-]+)\s*\{[^}]*grid-template-columns", css)
+    for cls in grid_classes:
+        assert f'class="card {cls}"' not in module_js, \
+            f"a lesson card uses .{cls}, which is a grid layout defined for another component"
