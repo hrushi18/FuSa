@@ -128,6 +128,22 @@
   .parts { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; }
   .parts .ok { color: var(--s-passed); }
   .parts .no { color: var(--c-gate_failed); }
+  .parts .warn { color: var(--s-needs_review); }
+  .gap-phase { margin-top: 18px; }
+  .gap-phase h3 { font-size: 12px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase;
+                  color: var(--dim); margin: 0; }
+  /* Fixed columns because each phase is its own table: with automatic widths the marks and
+     the reasons land at a different x in every section, which reads as a different report. */
+  .gap-phase .trace { table-layout: fixed; }
+  .gap-phase .trace td { vertical-align: top; line-height: 1.6; }
+  .gap-ico { width: 24px; padding-right: 0; }
+  .gap-wp { width: 220px; }
+  .gap-lesson { width: 170px; }
+  .gap-row .dots { color: var(--dim); font-size: 11px; margin-left: 8px; }
+  .gap-row a { color: var(--accent); text-decoration: none; font-size: 11px; white-space: nowrap; }
+  .gap-ok      td:nth-child(2) code { color: var(--s-passed); }
+  .gap-warn    td:nth-child(2) code { color: var(--s-needs_review); }
+  .gap-missing td:nth-child(2) code { color: var(--c-gate_failed); }
   .seedbox { width: 88px; background: var(--panel2); color: var(--text); font: inherit;
              border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
 </style>

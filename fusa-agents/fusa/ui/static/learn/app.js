@@ -64,7 +64,14 @@ export async function route() {
     drawNav(select);
     if (!tool) { $("#learn-main").innerHTML = `<p style="color:var(--dim)">No such tool.</p>`; return; }
     const m = await import(`./tools/${tool.id}.js`);
-    (m.renderAsil || m.renderHara || m.renderTrace)($("#learn-main"));
+    // The module's own render export, found by prefix. A list of names here shipped a tool that
+    // rendered a blank pane while every test passed: the harness imported the view directly and
+    // so never came through this line. A new tool is a file and a nav entry, nothing more.
+    const render = Object.values(m).find(v => typeof v === "function" && /^render/.test(v.name));
+    // tool.id came out of TOOLS, not out of the hash, so there is nothing here to escape.
+    if (!render) { $("#learn-main").innerHTML =
+      `<p style="color:var(--dim)">The ${tool.id} tool exports no view.</p>`; return; }
+    render($("#learn-main"));
     return;
   }
   const id = decodeURIComponent(location.hash.replace(/^#\/?/, ""));

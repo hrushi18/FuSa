@@ -16,6 +16,7 @@ export const TOOLS = [
   {id: "asil",  title: "ASIL Calculator"},
   {id: "hara",  title: "HARA Builder"},
   {id: "trace", title: "Traceability Lab"},
+  {id: "validate", title: "Validate My FuSa System"},
 ];
 
 export function drawNav(onSelect, filter = "") {

@@ -369,3 +369,96 @@ def test_filling_a_cell_writes_the_selected_key_and_then_re_reads_the_table(asil
     assert posted[0]["body"]["values"] == {"S3-E4-C3": "C"}
     # the harness types C and has the re-read answer B: only a genuine re-read shows B
     assert badge_of(asil_paths["after_fill"]) == "B", "the input was echoed, not re-read"
+
+
+# ---- the gap report's view, rendered under node -------------------------------------------
+
+VALIDATE = Path(__file__).parent / "js" / "validate-paths.mjs"
+
+
+def run_validate(learn_dir: Path = LEARN) -> dict:
+    r = subprocess.run(["node", str(VALIDATE), str(learn_dir)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"harness failed:\n{r.stderr}"
+    return json.loads(r.stdout)
+
+
+@pytest.fixture(scope="module")
+def gaps_view() -> dict:
+    return run_validate()
+
+
+def test_the_phases_come_out_in_lifecycle_order_under_their_own_names(gaps_view):
+    """A gap report the learner reads down the V. Map order would put them in whatever order
+    the assessments happened to arrive, which is not an order anyone reviews a project in."""
+    assert gaps_view["sections"] == ["Phase 1 · Concept &amp; Requirements",
+                                     "Phase 2 · System Analysis"]   # read out of the markup
+
+
+def test_each_state_gets_its_own_mark_and_never_borrows_another(gaps_view):
+    assert {r["wp"]: r["icon"] for r in gaps_view["rows"]} == {
+        "HARA": "✅", "HSR": "⚠️", "SADS": "❌"}
+
+
+def test_a_row_links_to_its_lesson_and_a_row_without_one_shows_no_link(gaps_view):
+    """The loop that makes the course and the gap report one list. A row with no lesson yet is
+    normal — inventing a link for it would send the learner to a page that does not exist."""
+    assert {r["wp"]: r["link"] for r in gaps_view["rows"]} == {
+        "HARA": "concept.hara", "HSR": None, "SADS": "system.sads"}
+    assert {r["wp"]: r["offered"] for r in gaps_view["rows"]} == {
+        "HARA": True, "HSR": False, "SADS": True}
+
+
+def test_the_view_states_the_same_basis_the_pdf_states(gaps_view):
+    """Whether a model wrote any of this is the first question an assessor asks, and two
+    different answers on two surfaces is worse than neither."""
+    assert "No language model produced or judged any part of this report" in gaps_view["html"]
+
+
+def test_with_nothing_generated_the_report_says_so_and_links_to_the_board(gaps_view):
+    """Every row missing is a project nobody has run, not a finding about their safety file."""
+    html = gaps_view["first_run_html"]
+    assert "Nothing has been generated yet" in html
+    assert 'href="/"' in html, "the learner needs somewhere to go, not just a verdict"
+    assert "NOT_RELEASABLE" not in html, "a verdict on an empty project reads as a judgement"
+
+
+def test_what_the_gap_report_sends_is_escaped_before_it_reaches_the_page(gaps_view):
+    assert "&lt;script&gt;" in gaps_view["hostile_html"]
+    assert "<script>" not in gaps_view["hostile_html"]
+
+
+def test_the_harness_notices_an_inverted_icon_mapping(tmp_path):
+    """The guard on the mapping test: a harness that cannot fail proves nothing."""
+    broken = tmp_path / "learn"
+    shutil.copytree(LEARN, broken)
+    src = (broken / "tools" / "validate.js").read_text(encoding="utf-8")
+    swapped = src.replace('ok: "✅", warn: "⚠️", missing: "❌"',
+                          'ok: "❌", warn: "⚠️", missing: "✅"')
+    assert swapped != src, "validate.js changed shape — update this test with it"
+    (broken / "tools" / "validate.js").write_text(swapped, encoding="utf-8")
+    assert run_validate(broken)["rows"][0]["icon"] == "❌"
+
+
+# ---- every tool, reached through the router rather than by name ---------------------------
+
+ROUTES = Path(__file__).parent / "js" / "tool-routes.mjs"
+
+
+def run_routes(learn_dir: Path = LEARN) -> dict:
+    r = subprocess.run(["node", str(ROUTES), str(learn_dir)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"harness failed:\n{r.stderr}"
+    return json.loads(r.stdout)
+
+
+def test_every_tool_in_the_nav_draws_something_when_routed_to():
+    """The gap the other harnesses leave: they import a view's render function by name, so the
+    router never runs. A fourth tool the router's list of names did not mention rendered a blank
+    pane with all of them green — confirmed on screen before this test existed."""
+    drawn = run_routes()
+    assert set(drawn) == {"asil", "hara", "trace", "validate"}, \
+        "a tool was added to the nav without being routed here"
+    for tool, got in drawn.items():
+        assert got["chars"] > 200, f"{tool} routed to an empty pane"
+        assert got["crumb"].startswith("Tools \u2192 ")
