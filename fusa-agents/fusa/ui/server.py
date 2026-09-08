@@ -30,6 +30,7 @@
     GET  /api/learn/asil      S×E×C -> ASIL, by the same lookup the chain performs
     GET  /api/learn/scenarios/{tool}  the cases one interactive tool teaches with
     GET  /api/learn/trace     one safety goal's branch with a link removed, from _generated/
+    GET  /api/learn/gaps      this project's own safety file, by phase, from the release report
 """
 from __future__ import annotations
 
@@ -49,9 +50,10 @@ from fastapi.staticfiles import StaticFiles
 from .. import config
 from ..agents.llm import PROVIDERS
 from ..generators.kinds import TRACE_CHAIN
-from ..learn import ContentRegistry, ProgressStore
+from ..learn import ProgressStore
+from ..learn.content import default_registry
 from ..learn.rules import check_bundle, check_scenarios
-from ..learn.tools import NoTrace, UnknownClass, asil_lookup, trace_case
+from ..learn.tools import NoTrace, UnknownClass, asil_lookup, gap_report, trace_case
 from ..models import Status
 from ..orchestrator import Orchestrator, UnknownAgent
 from ..pdf import render_pdf
@@ -61,7 +63,6 @@ from ..tools import reqtable
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 STATIC = Path(__file__).parent / "static"
-CONTENT_SAMPLE = Path(__file__).parent / "content-sample"
 FMEDA_COLUMNS = reqtable.FMEDA_COLUMNS        # one home for the column registry
 
 
@@ -132,7 +133,7 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
     app.state.orchestrator = orch
     app.state.runner = runner
 
-    content = ContentRegistry(CONTENT_SAMPLE, config.CONTENT_DIR)
+    content = default_registry()
     progress = ProgressStore(orch.root / "_generated" / "learning-progress.json",
                              pass_mark=config.LEARN_PASS_MARK)
     app.state.content = content
@@ -553,6 +554,12 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
         except NoTrace as exc:
             return {"ready": False, "seed": seed, "reason": str(exc),
                     "missing": [wp for wp in TRACE_CHAIN if not orch.reg.generated.exists(wp)]}
+
+    @app.get("/api/learn/gaps")
+    def learn_gaps(asil: str = "B"):
+        """This learner's own project, phase by phase — the assessments /report.pdf already
+        renders, so the course and the release report cannot tell two different stories."""
+        return gap_report(orch, asil, content)
 
     @app.get("/api/learn/scenarios/{tool}")
     def learn_scenarios(tool: str):

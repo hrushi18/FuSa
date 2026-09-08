@@ -12,6 +12,16 @@ import json
 from pathlib import Path
 
 
+SAMPLE_DIR = Path(__file__).resolve().parents[1] / "ui" / "content-sample"
+
+
+def default_registry() -> "ContentRegistry":
+    """The course as the server serves it. Anything reading content outside a request needs the
+    same pair of directories, and a second spelling of them is a second course."""
+    from .. import config                      # read late: tests reload config onto a temp root
+    return ContentRegistry(SAMPLE_DIR, config.CONTENT_DIR)
+
+
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))

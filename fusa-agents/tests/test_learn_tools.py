@@ -474,3 +474,149 @@ def test_the_endpoint_reports_the_table_even_where_the_table_is_surprising(clien
         s, e, c = key.split("-")
         got = client.get("/api/learn/asil", params={"s": s, "e": e, "c": c}).json()["asil"]
         assert got == expected, f"{key}: table says {expected}, endpoint said {got} — derived?"
+
+
+# ---- the gap report: the release report, read by phase --------------------------------------
+
+def test_the_gap_report_agrees_with_the_release_report(client, workspace):
+    """No new engine. If these ever disagree, one of them is lying to an assessor."""
+    from fusa.orchestrator import Orchestrator
+    from fusa.report import validate
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    rep = validate(orch)
+    gaps = gap_report(orch)
+    assert gaps["verdict"] == rep.verdict
+    flat = {r["work_product"]: r for p in gaps["phases"] for r in p["rows"]}
+    assert set(flat) == {a.work_product for a in rep.work_products}
+    for a in rep.work_products:
+        assert (flat[a.work_product]["state"] == "ok") == a.ok
+
+
+def test_a_blocked_work_product_is_missing_not_merely_warned(client, workspace):
+    from fusa.models import GateResult, Status
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    orch.reg.process.update("HARA", "sys-hara", status=Status.GATE_FAILED,
+                            gate=GateResult(work_product="HARA", passed=False,
+                                            errors=["HZ-001 has no parent"]))
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["HARA"]["state"] == "missing"
+    assert any("parent" in w for w in flat["HARA"]["why"])
+
+
+def test_a_pending_marker_warns_rather_than_reading_as_missing(client, workspace):
+    """The line between 'not written' and 'written, with a hole in it' is the whole point of
+    three states rather than two."""
+    from fusa.models import GateResult, Status
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    orch.reg.process.update("HARA", "sys-hara", status=Status.GATE_PASSED, pending_count=1,
+                            gate=GateResult(work_product="HARA", passed=True,
+                                            pending=["[PENDING] exposure for HZ-001"]))
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["HARA"]["state"] == "warn"
+    assert any("PENDING" in w for w in flat["HARA"]["why"])
+
+
+def test_an_open_blocker_finding_is_missing_even_though_the_gate_passed(client, workspace):
+    from fusa.models import Finding, GateResult, ReviewVerdict, Status
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    orch.reg.process.update("HARA", "sys-hara", status=Status.REWORK,
+                            gate=GateResult(work_product="HARA", passed=True),
+                            review=ReviewVerdict(work_product="HARA", verdict="rework",
+                                                 findings=[Finding(id="F-1", severity="blocker",
+                                                                   description="no controllability rationale")]))
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["HARA"]["state"] == "missing"
+
+
+def test_a_minor_finding_only_warns(client, workspace):
+    from fusa.models import Finding, GateResult, ReviewVerdict, Status
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    orch.reg.process.update("HARA", "sys-hara", status=Status.REWORK,
+                            gate=GateResult(work_product="HARA", passed=True),
+                            review=ReviewVerdict(work_product="HARA", verdict="rework",
+                                                 findings=[Finding(id="F-2", severity="minor",
+                                                                   description="wording")]))
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["HARA"]["state"] == "warn"
+
+
+def test_a_work_product_nothing_has_written_yet_is_missing(client, workspace):
+    """A fresh project is all holes, and the report says so before anything has run."""
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    gaps = gap_report(orch)
+    rows = [r for p in gaps["phases"] for r in p["rows"]]
+    assert rows and all(r["state"] == "missing" for r in rows)
+    assert gaps["totals"] == {"ok": 0, "warn": 0, "missing": len(rows)}
+
+
+def test_a_row_names_the_checklist_its_gate_will_be_read_against(client, workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["HARA"]["checklist_ref"] == "HARA"
+    assert flat["HSR"]["checklist_ref"] == "generic"      # its agent declares the shared one
+
+
+def test_every_row_carries_the_phase_its_agent_belongs_to(client, workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    by_wp = {s.work_product: s.phase for s in orch.specs}
+    for p in gap_report(orch)["phases"]:
+        for r in p["rows"]:
+            assert by_wp[r["work_product"]] == p["phase"]
+
+
+def test_a_phase_is_titled_the_way_the_board_titles_it(client, workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import PHASE_NAMES, gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    for p in gap_report(orch)["phases"]:
+        assert p["title"] == PHASE_NAMES[p["phase"]]
+
+
+def test_a_row_links_to_the_module_that_taught_its_checklist(client, workspace):
+    """The loop that makes the course and the gap report one list rather than two."""
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["HARA"]["module_id"] == "concept.hara"       # the sample module teaches HARA
+
+
+def test_a_work_product_with_no_lesson_yet_is_not_an_error(client, workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    flat = {r["work_product"]: r for p in gap_report(orch)["phases"] for r in p["rows"]}
+    assert flat["TSC"]["module_id"] is None
+
+
+def test_the_totals_count_the_states_the_rows_actually_carry(client, workspace):
+    from fusa.orchestrator import Orchestrator
+    from fusa.learn.tools import gap_report
+    orch = Orchestrator(root=workspace, dry_run=True)
+    gaps = gap_report(orch)
+    rows = [r for p in gaps["phases"] for r in p["rows"]]
+    for state in ("ok", "warn", "missing"):
+        assert gaps["totals"][state] == sum(1 for r in rows if r["state"] == state)
+
+
+def test_the_endpoint_serves_the_gap_report_for_the_asil_it_is_asked_about(client):
+    r = client.get("/api/learn/gaps", params={"asil": "D"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["asil"] == "D"
+    assert [p["phase"] for p in body["phases"]] == sorted(p["phase"] for p in body["phases"])

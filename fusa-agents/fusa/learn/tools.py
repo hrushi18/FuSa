@@ -11,6 +11,9 @@ import random
 
 from ..generators.kinds import (ASIL_TABLE_FILE, TRACE_CHAIN, determine_asil,
                                 load_asil_table)
+from ..models import Status
+from ..report import BLOCKING_SEVERITIES, validate
+from .content import default_registry
 
 SEVERITY = ("S0", "S1", "S2", "S3")
 EXPOSURE = ("E0", "E1", "E2", "E3", "E4")
@@ -231,4 +234,52 @@ def trace_case(orch, seed: int) -> dict:
         "questions": {"link": _link_question(path, cut, goal_id, reached),
                       "phase": _phase_question(orch, path, cut),
                       "evidence": _evidence_question(orch, path, cut, goal_id, rng)},
+    }
+
+
+def _state(a) -> str:
+    """One assessment, sorted into the three the board prints. It decides nothing about the work
+    product — `validate()` already did — only how loudly a learner is told about it. Missing is
+    reserved for what cannot be read at all: never written, structurally rejected, or held open
+    by a blocker."""
+    if a.ok:
+        return "ok"
+    blocking = any(f.severity in BLOCKING_SEVERITIES for f in a.findings)
+    if a.status == Status.NOT_STARTED.value or a.gate_errors or blocking:
+        return "missing"
+    return "warn"
+
+
+def gap_report(orch, asil: str = "B", content=None) -> dict:
+    """The release report, read by lifecycle phase and linked to the lessons.
+
+    No judgement is made here. `validate()` assesses every work product and this joins its
+    assessments to the phase their agent sits in — which the assessment does not carry — and to
+    the module that teaches their checklist. A number here that disagrees with the validation
+    report means this view is wrong, not the report.
+    """
+    rep = validate(orch, asil)
+    content = content or default_registry()
+    taught: dict[str, str] = {}
+    for m in content.modules():
+        # First in course order wins: a later deep-dive is not where a learner is sent to start.
+        if m.get("checklist_ref"):
+            taught.setdefault(m["checklist_ref"], m["id"])
+
+    by_wp = {s.work_product: s for s in orch.specs}
+    rows: dict[int, list[dict]] = {}
+    for a in rep.work_products:
+        spec = by_wp[a.work_product]
+        checklist = spec.checklist or spec.work_product
+        rows.setdefault(spec.phase, []).append(
+            {"work_product": a.work_product, "agent": a.agent, "state": _state(a),
+             "why": list(a.reasons), "checklist_ref": checklist,
+             "module_id": taught.get(checklist)})
+
+    flat = [r for phase in rows.values() for r in phase]
+    return {
+        "verdict": rep.verdict, "asil": rep.asil, "generated": rep.generated, "basis": rep.basis,
+        "totals": {s: sum(1 for r in flat if r["state"] == s) for s in ("ok", "warn", "missing")},
+        "phases": [{"phase": n, "title": PHASE_NAMES.get(n, "unnamed"), "rows": rows[n]}
+                   for n in sorted(rows)],
     }
