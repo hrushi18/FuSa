@@ -153,3 +153,104 @@ def test_the_harness_notices_a_row_that_invents_an_asil(tmp_path):
     assert invented != src, "hara.js changed shape — update this test with it"
     (broken / "tools" / "hara.js").write_text(invented, encoding="utf-8")
     assert run_tools(broken)["untranscribed_asil_cell"] == "D"
+
+
+# ---- the Traceability Lab's rubric, scored under node ----
+
+TRACE = Path(__file__).parent / "js" / "trace-paths.mjs"
+
+
+def run_trace(case: dict, tmp_path: Path, learn_dir: Path = LEARN) -> dict:
+    payload = tmp_path / "case.json"
+    payload.write_text(json.dumps(case), encoding="utf-8")
+    r = subprocess.run(["node", str(TRACE), str(learn_dir), str(payload)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"harness failed:\n{r.stderr}"
+    return json.loads(r.stdout)
+
+
+@pytest.fixture(scope="module")
+def case(tmp_path_factory) -> dict:
+    """A case the server really built, from a project whose chain has been run."""
+    import shutil as sh
+    root = tmp_path_factory.mktemp("traced")
+    for d in ["_clause-register", "_reference-register", "_checklist-register", "config", "input"]:
+        sh.copytree(ROOT / d, root / d)
+    (root / "_generated").mkdir()
+    from fusa.learn.tools import trace_case
+    from fusa.orchestrator import Orchestrator
+    orch = Orchestrator(root=root, dry_run=True, author="deterministic", reviewer="rules")
+    orch.run_all(log=lambda *a: None)
+    return trace_case(orch, 3)
+
+
+@pytest.fixture(scope="module")
+def scored(case, tmp_path_factory) -> dict:
+    return run_trace(case, tmp_path_factory.mktemp("trace-js"))
+
+
+def test_the_rubric_is_scored_in_three_independent_parts(scored):
+    assert scored["parts"] == ["link", "phase", "evidence"]
+    assert scored["all_right"]["right"] == 3 and scored["all_right"]["score"] == 1.0
+    assert scored["all_wrong"]["right"] == 0 and scored["all_wrong"]["score"] == 0.0
+
+
+def test_a_partly_correct_answer_is_reported_as_partly_correct(scored):
+    """The reason the parts are scored apart: finding the break and knowing who owns the fix
+    are two different things to have learned, and one number would hide which one is missing."""
+    partly = scored["partly"]
+    assert partly["right"] == 2 and partly["of"] == 3
+    assert {p["key"]: p["right"] for p in partly["parts"]} == {
+        "link": True, "phase": False, "evidence": True}
+    assert "the broken link" in partly["verdict"] and "the evidence that closes it" in partly["verdict"]
+    assert "wrong about the phase that owns the fix" in partly["verdict"]
+
+
+def test_the_part_the_learner_got_wrong_carries_both_reasons(scored):
+    """Why the pick was wrong, and what was right — a wrong answer with no reason teaches
+    nothing, and the reason for the right answer is the whole lesson of the part."""
+    phase = scored["partly_phase"]
+    assert phase["right"] is False
+    assert phase["why"].strip() and phase["keyWhy"].strip()
+    assert phase["why"] != phase["keyWhy"] and phase["keyText"].startswith("Phase ")
+
+
+def test_a_part_left_unanswered_is_wrong_rather_than_a_crash(scored):
+    un = scored["unanswered"]
+    assert un["right"] == 1
+    assert [p["answered"] for p in un["parts"]] == [True, False, False]
+    assert "unanswered" in next(p["why"] for p in un["parts"] if p["key"] == "phase")
+
+
+def test_the_lab_draws_the_branch_it_was_given(scored, case):
+    html = scored["ready_html"]
+    assert case["goal"]["id"] in html and case["goal"]["text"] in html
+    for row in case["rows"]:
+        assert row["work_product"] in html and row["agent"] in html
+    assert "—" in html, "a broken link shows as an empty cell, which is the whole exercise"
+    assert f'id="seed" class="seedbox" type="number" value="{case["seed"]}"' in html, \
+        "the seed is on the page, because an instructor sets one for a whole class"
+
+
+def test_with_nothing_generated_the_lab_says_to_run_the_chain_and_links_to_the_board(scored):
+    html = scored["empty_html"]
+    assert "Run the chain first" in html
+    assert 'href="/"' in html, "the learner needs somewhere to go, not just a refusal"
+    assert "SADS has not been produced yet" in html and "SADS, TSR" in html
+
+
+def test_what_the_server_sends_is_escaped_before_it_reaches_the_page(scored):
+    assert "&lt;script&gt;" in scored["hostile_html"]
+    assert "<script>" not in scored["hostile_html"]
+
+
+def test_the_harness_notices_a_scorer_that_collapses_the_three_parts(case, tmp_path):
+    """The guard on all of the above: a harness that cannot fail proves nothing."""
+    broken = tmp_path / "learn"
+    shutil.copytree(LEARN, broken)
+    src = (broken / "tools" / "trace.js").read_text(encoding="utf-8")
+    collapsed = src.replace("      right: answered && chose === q.answer,",
+                            "      right: answered,")
+    assert collapsed != src, "trace.js changed shape — update this test with it"
+    (broken / "tools" / "trace.js").write_text(collapsed, encoding="utf-8")
+    assert run_trace(case, tmp_path, broken)["partly"]["right"] == 3

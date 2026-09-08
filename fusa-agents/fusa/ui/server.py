@@ -29,6 +29,7 @@
     POST /api/learn/progress  record cards seen or a quiz score for one module
     GET  /api/learn/asil      S×E×C -> ASIL, by the same lookup the chain performs
     GET  /api/learn/scenarios/{tool}  the cases one interactive tool teaches with
+    GET  /api/learn/trace     one safety goal's branch with a link removed, from _generated/
 """
 from __future__ import annotations
 
@@ -47,9 +48,10 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import config
 from ..agents.llm import PROVIDERS
+from ..generators.kinds import TRACE_CHAIN
 from ..learn import ContentRegistry, ProgressStore
 from ..learn.rules import check_bundle, check_scenarios
-from ..learn.tools import UnknownClass, asil_lookup
+from ..learn.tools import NoTrace, UnknownClass, asil_lookup, trace_case
 from ..models import Status
 from ..orchestrator import Orchestrator, UnknownAgent
 from ..pdf import render_pdf
@@ -536,6 +538,19 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
             return asil_lookup(orch.reg, s, e, c)
         except UnknownClass as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.get("/api/learn/trace")
+    def learn_trace(seed: int = 0):
+        """One branch of the project's own trace, with a link removed for the learner to find.
+
+        With nothing generated there is no chain to break, so that is a state the tool renders
+        and not a 500 — inventing a case would teach a file the learner cannot go and read.
+        """
+        try:
+            return trace_case(orch, seed)
+        except NoTrace as exc:
+            return {"ready": False, "seed": seed, "reason": str(exc),
+                    "missing": [wp for wp in TRACE_CHAIN if not orch.reg.generated.exists(wp)]}
 
     @app.get("/api/learn/scenarios/{tool}")
     def learn_scenarios(tool: str):

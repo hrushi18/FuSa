@@ -111,6 +111,18 @@
   .pair p:last-child { margin-bottom: 0; }
   .rowout { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
             padding: 12px; font-size: 11px; overflow-x: auto; white-space: pre; margin: 0 0 4px; }
+
+  .trace { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+  .trace th { text-align: left; font-weight: 400; font-size: 10px; letter-spacing: 1px;
+              text-transform: uppercase; color: var(--dim); padding: 0 10px 6px 0; }
+  .trace td { padding: 5px 10px 5px 0; border-top: 1px solid var(--line); }
+  .trace tr.gapped td { color: var(--dim); }
+  .trace tr.gapped td:last-child { color: var(--c-gate_failed); }
+  .parts { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; }
+  .parts .ok { color: var(--s-passed); }
+  .parts .no { color: var(--c-gate_failed); }
+  .seedbox { width: 88px; background: var(--panel2); color: var(--text); font: inherit;
+             border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
 </style>
 </head>
 <body>

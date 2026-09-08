@@ -168,3 +168,277 @@ def test_a_tool_with_no_scenario_file_has_none_rather_than_an_error(client):
 def test_a_tool_name_that_could_name_a_file_is_refused(client, name):
     """The name indexes a path under the content directory; only a plain id may."""
     assert client.get(f"/api/learn/scenarios/{name}").status_code == 404
+
+
+# ---- the Traceability Lab ----
+
+TRACE_JS = ROOT / "fusa" / "ui" / "static" / "learn" / "tools" / "trace.js"
+
+
+@pytest.fixture
+def traced(workspace):
+    """A project whose chain has actually been run — the lab has nothing to teach without one."""
+    from fusa.orchestrator import Orchestrator
+    orch = Orchestrator(root=workspace, dry_run=True, author="deterministic", reviewer="rules")
+    orch.run_all(log=lambda *a: None)
+    return orch
+
+
+@pytest.fixture
+def traced_client(traced, workspace):
+    from fusa.ui.server import create_app
+    with TestClient(create_app(root=workspace, dry_run=True)) as c:
+        yield c
+
+
+def broken_link(case) -> str:
+    q = case["questions"]["link"]
+    return q["options"][q["answer"]]["text"]
+
+
+LINK_RE = re.compile(r"(\S+) → (\S+)\s+\((\S+) → (\S+)\)")
+
+
+def links(case) -> list[tuple[str, str, str, str]]:
+    """(parent id, child id, parent work product, child work product) for every offered link."""
+    return [LINK_RE.match(o["text"]).groups() for o in case["questions"]["link"]["options"]]
+
+
+def test_a_case_carries_exactly_one_broken_link(traced):
+    """Replay the branch: an item traces if and only if its parent does and this is not the one
+    link that was cut. More than one break and neither the question nor the fix has one answer."""
+    from fusa.learn.tools import trace_case
+    for seed in range(12):
+        case = trace_case(traced, seed)
+        cut = case["questions"]["link"]["answer"]
+        shown = {r["id"] for r in case["rows"] if r["id"]}
+        assert shown >= {case["goal"]["id"]}
+        reached = {case["goal"]["id"]}
+        for i, (parent, child, _, _) in enumerate(links(case)):
+            if i != cut and parent in reached:
+                reached.add(child)
+        assert shown == reached, f"seed {seed}: {shown} traced, but one cut link explains {reached}"
+        assert len(shown) < len(links(case)) + 1, f"seed {seed}: nothing was actually broken"
+
+
+def test_the_same_seed_gives_the_same_case(traced):
+    """An instructor sets a seed and a room full of learners gets one case."""
+    from fusa.learn.tools import trace_case
+    assert trace_case(traced, 41) == trace_case(traced, 41)
+
+
+def test_different_seeds_give_different_cases(traced):
+    from fusa.learn.tools import trace_case
+    seen = {(trace_case(traced, s)["goal"]["id"], broken_link(trace_case(traced, s)))
+            for s in range(20)}
+    assert len(seen) > 1
+
+
+def test_the_phase_that_owns_the_fix_is_a_real_phase_of_the_project(traced):
+    """A made-up phase would send the learner to a part of the lifecycle this project has not."""
+    from fusa.learn.tools import trace_case
+    real = {s.phase for s in traced.specs}
+    for seed in range(12):
+        q = trace_case(traced, seed)["questions"]["phase"]
+        for option in q["options"]:
+            assert int(option["text"].split()[1]) in real
+
+
+def test_the_phase_named_is_the_phase_of_the_agent_that_writes_the_missing_link(traced):
+    """The fix lands where the work product is authored, not where the gap was noticed."""
+    from fusa.learn.tools import trace_case
+    for seed in range(12):
+        case = trace_case(traced, seed)
+        wp = links(case)[case["questions"]["link"]["answer"]][3]
+        owner = next(s for s in traced.specs if s.work_product == wp)
+        q = case["questions"]["phase"]
+        assert q["options"][q["answer"]]["text"].startswith(f"Phase {owner.phase} ")
+
+
+def test_every_work_product_a_case_cites_is_one_an_agent_produces(traced):
+    """The lab may only describe the file the learner can go and open."""
+    from fusa.learn.tools import trace_case
+    declared = {s.work_product for s in traced.specs}
+    for seed in range(12):
+        case = trace_case(traced, seed)
+        assert case["goal"]["work_product"] in declared
+        for row in case["rows"]:
+            assert row["work_product"] in declared
+            assert row["agent"] in {s.id for s in traced.specs}
+
+
+def test_every_id_a_case_shows_comes_from_the_generated_work_products(traced):
+    """The point of reading `_generated/` rather than inventing a case: the ids are real."""
+    from fusa.learn.tools import trace_case
+    real = set(traced.reg.generated.all_ids())
+    for seed in range(12):
+        case = trace_case(traced, seed)
+        assert case["goal"]["id"] in real
+        for row in case["rows"]:
+            assert row["id"] is None or row["id"] in real
+
+
+def test_every_part_of_the_rubric_ships_a_reason_for_every_option(traced):
+    """A wrong answer with no reason teaches nothing — the same rule the quiz content obeys."""
+    from fusa.learn.tools import trace_case, TRACE_PARTS
+    case = trace_case(traced, 5)
+    assert list(case["questions"]) == list(TRACE_PARTS)
+    for q in case["questions"].values():
+        assert q["prompt"].strip() and q["title"].strip()
+        assert len(q["options"]) > 1
+        for option in q["options"]:
+            assert option["text"].strip() and option["why"].strip()
+
+
+def test_the_answer_to_the_evidence_question_is_not_always_the_first_option(traced):
+    """An answer that never moves is a lesson about lists rather than about evidence."""
+    from fusa.learn.tools import trace_case
+    assert len({trace_case(traced, s)["questions"]["evidence"]["answer"]
+                for s in range(20)}) > 1
+
+
+def test_with_nothing_generated_the_lab_says_to_run_the_chain(client):
+    """No chain, no trace. Inventing a case would teach a file the learner cannot open."""
+    r = client.get("/api/learn/trace", params={"seed": 1}).json()
+    assert r["ready"] is False
+    assert r["reason"] == "SADS has not been produced yet"
+    assert r["missing"] == ["SADS", "TSR", "TSC", "HSR", "HW-DESIGN", "TEST-SPEC"]
+
+
+def test_a_safety_goal_with_nothing_under_it_is_passed_over_not_crashed_on(traced, workspace):
+    """A goal nobody has written a requirement for yet is the commonest state of a live project,
+    and it is a branch with no links in it — there is nothing there to break."""
+    from fusa.learn.tools import trace_case
+    from fusa.orchestrator import Orchestrator
+    sads = traced.reg.generated.read("SADS")
+    traced.reg.generated.write("SADS", sads + "\n### SG-099\n- parent: HZ-001\n- asil: B\n"
+                                              "- text: Nothing has been written under this one.\n")
+    orch = Orchestrator(root=workspace, dry_run=True)
+    for seed in range(20):
+        assert trace_case(orch, seed)["goal"]["id"] != "SG-099"
+
+
+def test_a_chain_run_only_partway_still_yields_a_case_from_what_exists(traced, workspace):
+    """The lab is for a project mid-run as much as a finished one, and a level that was never
+    produced is simply a level nothing hangs off."""
+    import shutil
+    from fusa.learn.tools import trace_case
+    from fusa.orchestrator import Orchestrator
+    shutil.rmtree(workspace / "_generated" / "TSC")
+    orch = Orchestrator(root=workspace, dry_run=True)
+    for seed in range(8):
+        levels = [r["work_product"] for r in trace_case(orch, seed)["rows"]]
+        assert "TSC" not in levels and levels[:2] == ["SADS", "TSR"]
+
+
+def test_the_goal_a_case_opens_with_is_the_one_the_project_wrote(traced):
+    """The ASIL and the wording are the safety goal's own — a neighbouring goal's would put the
+    wrong rating in front of the learner with nothing to reveal it."""
+    from fusa.learn.tools import trace_case
+    for seed in range(8):
+        goal = trace_case(traced, seed)["goal"]
+        item = next(i for i in traced.reg.generated.items("SADS") if i.id == goal["id"])
+        assert goal["asil"] == item.fields["asil"] and goal["text"] == item.fields["text"]
+
+
+def test_the_reason_offered_for_each_link_says_where_that_link_stands(traced):
+    """The reasons are the teaching. Attached to the wrong options they would tell a learner who
+    found the break that they had found a consequence of it."""
+    from fusa.learn.tools import trace_case
+    for seed in range(8):
+        case = trace_case(traced, seed)
+        q = case["questions"]["link"]
+        firsts = [i for i, o in enumerate(q["options"]) if "first item in the branch" in o["why"]]
+        assert firsts == [q["answer"]]
+        traced_ids = {r["id"] for r in case["rows"] if r["id"]}
+        for i, (option, (_, child, _, _)) in enumerate(zip(q["options"], links(case))):
+            if i == q["answer"]:
+                continue
+            still = "still traces" in option["why"]
+            assert still is (child in traced_ids), f"seed {seed} option {i} explains the wrong side"
+
+
+def test_a_phase_the_learner_might_pick_is_explained_by_what_it_really_authors(traced):
+    """A distractor that misdescribes a phase teaches the lifecycle wrong on the way to teaching
+    traceability."""
+    from fusa.learn.tools import trace_case
+    case = trace_case(traced, 5)
+    q = case["questions"]["phase"]
+    for i, option in enumerate(q["options"]):
+        phase = int(option["text"].split()[1])
+        if i == q["answer"]:
+            assert "is produced by" in option["why"] and f"in phase {phase}" in option["why"]
+            continue
+        authored = [s.work_product for s in traced.specs
+                    if s.phase == phase and s.kind in ("authoring", "runner")]
+        listed = option["why"].split("owns ", 1)[1].split(". None", 1)[0]
+        assert listed == ", ".join(authored[:3]) + ("…" if len(authored) > 3 else "")
+
+
+def test_the_lab_reads_the_chain_off_the_traceability_agent_and_not_off_some_other(traced):
+    """Both the lab and the agent take the chain from one place, so a project that shortens it
+    shortens the lesson too."""
+    from fusa.learn.tools import trace_case
+    spec = next(s for s in traced.specs if (s.generator or {}).get("kind") == "traceability")
+    spec.generator["chain"] = ["SADS", "TSR"]
+    levels = {r["work_product"] for r in trace_case(traced, 4)["rows"]}
+    assert levels == {"SADS", "TSR"}
+
+
+def test_the_endpoint_serves_a_case_once_the_chain_has_run(traced_client):
+    r = traced_client.get("/api/learn/trace", params={"seed": 9})
+    assert r.status_code == 200 and r.json()["ready"] is True
+    assert r.json()["seed"] == 9
+
+
+def test_the_endpoint_hands_back_a_different_case_for_a_different_seed(traced_client):
+    get = lambda s: traced_client.get("/api/learn/trace", params={"seed": s}).json()
+    assert get(9) == get(9)
+    assert len({(get(s)["goal"]["id"], broken_link(get(s))) for s in range(8)}) > 1
+
+
+def test_the_lab_walks_the_chain_the_traceability_agent_declares(traced):
+    """Two spellings of the chain would let the lab teach a V the project does not build."""
+    from fusa.learn.tools import trace_case
+    spec = next(s for s in traced.specs if (s.generator or {}).get("kind") == "traceability")
+    from fusa.generators.kinds import TRACE_CHAIN
+    chain = spec.generator.get("chain") or TRACE_CHAIN
+    for seed in range(6):
+        levels = [r["work_product"] for r in trace_case(traced, seed)["rows"]]
+        assert levels == [wp for wp in chain if wp in levels]
+
+
+def test_the_break_is_a_link_the_project_really_has(traced):
+    """`parent:` is the only thing the matrix is built from, so a case must break one of those."""
+    from fusa.learn.tools import trace_case
+    for seed in range(12):
+        case = trace_case(traced, seed)
+        parent, child, _, _ = links(case)[case["questions"]["link"]["answer"]]
+        wp = traced.reg.generated.all_ids()[child]
+        item = next(i for i in traced.reg.generated.items(wp) if i.id == child)
+        assert parent in item.refs("parent"), f"{child} never named {parent} in the first place"
+
+
+def test_the_phase_names_the_lab_offers_are_the_ones_the_board_prints():
+    """Two copies of one list rot apart, and a learner sent to 'phase 3' should find the same
+    column on the workbench they were just looking at."""
+    from fusa.learn.tools import PHASE_NAMES
+    board = (ROOT / "fusa" / "ui" / "static" / "index.html").read_text(encoding="utf-8")
+    m = re.search(r"const PHASES = \{(.*?)\};", board, re.S)
+    assert m, "the board no longer declares PHASES — update this test with it"
+    printed = {int(n): t.split("·", 1)[1].strip() for n, t in re.findall(r'(\d+):\s*"([^"]+)"', m.group(1))}
+    assert printed == PHASE_NAMES
+
+
+def test_the_lab_asks_the_server_for_its_case_rather_than_shipping_one(traced_client):
+    js = traced_client.get("/static/learn/tools/trace.js")
+    assert js.status_code == 200 and "/api/learn/trace" in js.text
+    for hardcoded in ("SG-001", "TSR-001", "HSR-001"):
+        assert hardcoded not in js.text, f"trace.js hardcodes {hardcoded}"
+
+
+def test_the_three_parts_the_browser_scores_are_the_three_the_server_builds():
+    from fusa.learn.tools import TRACE_PARTS
+    m = re.search(r"export const PARTS = \[(.*?)\];", TRACE_JS.read_text(encoding="utf-8"), re.S)
+    assert m, "trace.js no longer declares PARTS — update this test with it"
+    assert re.findall(r'"([^"]+)"', m.group(1)) == list(TRACE_PARTS)
