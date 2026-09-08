@@ -58,7 +58,7 @@ verdict the report did not reach.
 `module_id` is the id of the module whose `checklist_ref` equals this work product's checklist,
 or `None` — a work product with no lesson yet is normal and must not error.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # append to tests/test_learn_tools.py
@@ -117,14 +117,14 @@ def test_a_work_product_with_no_lesson_yet_is_not_an_error(client, workspace):
     assert flat["TSC"]["module_id"] is None
 ```
 
-- [ ] **Step 2** Run them; watch each fail (`gap_report` does not exist).
-- [ ] **Step 3** Implement `gap_report` in `fusa/learn/tools.py`, reusing `validate()` and the
+- [x] **Step 2** Run them; watch each fail (`gap_report` does not exist).
+- [x] **Step 3** Implement `gap_report` in `fusa/learn/tools.py`, reusing `validate()` and the
       `ContentRegistry` for the module join. Do not re-derive any verdict.
-- [ ] **Step 4** Add `GET /api/learn/gaps?asil=B` to `fusa/ui/server.py`, beside the other
+- [x] **Step 4** Add `GET /api/learn/gaps?asil=B` to `fusa/ui/server.py`, beside the other
       learn routes, following their shape.
-- [ ] **Step 5** Break each mapped condition in turn (make `ok` unconditional; drop the phase
+- [x] **Step 5** Break each mapped condition in turn (make `ok` unconditional; drop the phase
       join; hardcode `module_id`) and confirm the matching test fails. Report which.
-- [ ] **Step 6** Mutation audit; commit.
+- [x] **Step 6** Mutation audit; commit.
 
 ---
 
@@ -142,15 +142,15 @@ at `#/tool/validate`; `nav.js`'s `TOOLS` gains `{id: "validate", title: "Validat
 - **Nothing generated yet** is the first-run state: say so and link to the board, exactly as the
   Traceability Lab does.
 
-- [ ] **Step 1** Failing node-harness test in `tests/js/validate-paths.mjs`: a scripted report
+- [x] **Step 1** Failing node-harness test in `tests/js/validate-paths.mjs`: a scripted report
       renders one section per phase, the right icon per state, and a module link only where
       `module_id` is present.
-- [ ] **Step 2** Watch it fail.
-- [ ] **Step 3** Implement.
-- [ ] **Step 4** A guard test proving the harness fails when the icon mapping is inverted.
-- [ ] **Step 5** Screenshot in a temp `FUSA_ROOT`, once with nothing generated and once after a
+- [x] **Step 2** Watch it fail.
+- [x] **Step 3** Implement.
+- [x] **Step 4** A guard test proving the harness fails when the icon mapping is inverted.
+- [x] **Step 5** Screenshot in a temp `FUSA_ROOT`, once with nothing generated and once after a
       deterministic run. LOOK at both.
-- [ ] **Step 6** Mutation audit; commit.
+- [x] **Step 6** Mutation audit; commit.
 
 ---
 
@@ -159,13 +159,13 @@ at `#/tool/validate`; `nav.js`'s `TOOLS` gains `{id: "validate", title: "Validat
 **Interfaces:** the module view gains a line naming how this project's own file fares against
 the checklist the lesson just taught.
 
-- [ ] **Step 1** Failing test: a module with a `checklist_ref` shows its work product's current
+- [x] **Step 1** Failing test: a module with a `checklist_ref` shows its work product's current
       state; a module without one shows nothing and does not error; nothing generated shows
       nothing rather than a false ✅.
-- [ ] **Step 2** Watch it fail.
-- [ ] **Step 3** Implement in `module.js`, reading the row from `/api/learn/gaps`.
-- [ ] **Step 4** Screenshot the HARA lesson showing its own project state.
-- [ ] **Step 5** Mutation audit; commit.
+- [x] **Step 2** Watch it fail.
+- [x] **Step 3** Implement in `module.js`, reading the row from `/api/learn/gaps`.
+- [x] **Step 4** Screenshot the HARA lesson showing its own project state.
+- [x] **Step 5** Mutation audit; commit.
 
 ---
 
@@ -182,3 +182,18 @@ the checklist the lesson just taught.
 
 File upload (deliberately — see Global Constraints), the landing dashboard, role paths and the
 certificate PDF (rest of M5), and M4's content.
+
+---
+
+## What the run changed
+
+Task 2's harness step grew a second file. `tests/js/tool-routes.mjs` drives every entry in
+`TOOLS` through `app.js`'s router, because the per-view harnesses import a render function by
+name and so never execute the router — which is how a fourth tool shipped rendering a blank
+pane with the suite green.
+
+Task 3 joins on the module's `work_products` rather than on its `checklist_ref`. The checklist
+`generic` covers many work products, so a lesson carrying it would be given a state belonging to
+whichever row was found first. The three cases the plan named behave as written.
+
+Suite: 604 (was 578). Mutation survivors: the two known ones, unchanged.
