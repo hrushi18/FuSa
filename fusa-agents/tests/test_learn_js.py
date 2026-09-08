@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -283,3 +284,59 @@ def test_the_harness_notices_a_scorer_that_collapses_the_three_parts(case, tmp_p
     assert collapsed != src, "trace.js changed shape — update this test with it"
     (broken / "tools" / "trace.js").write_text(collapsed, encoding="utf-8")
     assert run_trace(case, tmp_path, broken)["partly"]["right"] == 3
+
+
+# ---- the ASIL calculator, executed --------------------------------------------------------
+
+ASIL_HARNESS = Path(__file__).parent / "js" / "asil-paths.mjs"
+
+
+def run_asil(learn_dir: Path = LEARN) -> dict:
+    r = subprocess.run(["node", str(ASIL_HARNESS), str(learn_dir)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"harness failed:\n{r.stderr}"
+    return json.loads(r.stdout)
+
+
+def badge_of(html: str) -> str | None:
+    m = re.search(r"asil-badge[^>]*>\s*([A-D]|QM)\s*<", html)
+    return m.group(1) if m else None
+
+
+@pytest.fixture(scope="module")
+def asil_paths() -> dict:
+    return run_asil()
+
+
+def test_the_calculator_shows_the_table_even_where_the_table_is_surprising(asil_paths):
+    """The oracle. S+E+C reproduces the determination table exactly, so a calculator that
+    derives its answer is indistinguishable from one that reads it — for every real value.
+    These two cells disagree with the mnemonic, so a derivation cannot survive them however it
+    is spelled or renamed. A source grep can be evaded; arithmetic cannot lie about its output."""
+    assert badge_of(asil_paths["surprising"]) == "A"        # the mnemonic would say D
+    assert badge_of(asil_paths["surprising_low"]) == "D"    # the mnemonic would say QM
+
+
+def test_an_untranscribed_cell_never_becomes_a_letter_on_the_page(asil_paths):
+    """The failure this guards is silent: a plausible ASIL for a cell nobody transcribed is
+    wrong all the way down the chain with nothing downstream able to notice."""
+    assert badge_of(asil_paths["unfilled"]) is None
+    assert "not transcribed" in asil_paths["unfilled"]
+
+
+def test_the_asil_harness_fails_when_the_calculator_derives_an_answer(tmp_path):
+    """The guard on the two tests above. A harness that cannot catch a derivation would leave
+    R2 enforced by nothing — which is exactly the state a review already found this repo in."""
+    broken = tmp_path / "learn"
+    shutil.copytree(LEARN, broken)
+    src = (broken / "tools" / "asil.js").read_text(encoding="utf-8")
+    ladder = ("\nconst L = {7:'A',8:'B',9:'C',10:'D'};\n"
+              "function rate(p){const n=Number(p.s[1])+Number(p.e[1])+Number(p.c[1]);\n"
+              "  if(p.s[1]==='0'||p.e[1]==='0'||p.c[1]==='0')return 'QM';\n"
+              "  return n<=6?'QM':L[n];}\n")
+    src = src.replace("export function renderAsil(host) {", ladder + "export function renderAsil(host) {")
+    src = src.replace("  const verdictHtml = r => {",
+                      "  const verdictHtml = r => {\n    r = {...r, asil: r.asil ?? rate(pick)};")
+    (broken / "tools" / "asil.js").write_text(src, encoding="utf-8")
+    got = run_asil(broken)
+    assert badge_of(got["unfilled"]) is not None, "a derived answer went unnoticed"

@@ -453,3 +453,24 @@ def test_the_three_parts_the_browser_scores_are_the_three_the_server_builds():
     m = re.search(r"export const PARTS = \[(.*?)\];", TRACE_JS.read_text(encoding="utf-8"), re.S)
     assert m, "trace.js no longer declares PARTS — update this test with it"
     assert re.findall(r'"([^"]+)"', m.group(1)) == list(TRACE_PARTS)
+
+
+# ---- the oracle that cannot be fooled by how a formula is spelled --------------------------
+
+# The S+E+C mnemonic reproduces the determination table exactly, so any test using real values
+# cannot tell a lookup from a derivation. These use a table that DISAGREES with the mnemonic:
+# whatever an implementation derives, it will not be this. A source grep can be evaded by
+# renaming; this cannot.
+WRONG_TABLE = {"S3-E4-C3": "A",    # the mnemonic yields D
+               "S1-E1-C1": "D",    # the mnemonic yields QM
+               "S2-E2-C2": "D"}    # the mnemonic yields QM
+
+
+def test_the_endpoint_reports_the_table_even_where_the_table_is_surprising(client):
+    """The table is the authority. An implementation that derived the answer would disagree
+    with these cells, which is the only way to catch one that has been renamed."""
+    fill(client, **WRONG_TABLE)
+    for key, expected in WRONG_TABLE.items():
+        s, e, c = key.split("-")
+        got = client.get("/api/learn/asil", params={"s": s, "e": e, "c": c}).json()["asil"]
+        assert got == expected, f"{key}: table says {expected}, endpoint said {got} — derived?"
