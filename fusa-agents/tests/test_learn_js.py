@@ -462,3 +462,44 @@ def test_every_tool_in_the_nav_draws_something_when_routed_to():
     for tool, got in drawn.items():
         assert got["chars"] > 200, f"{tool} routed to an empty pane"
         assert got["crumb"].startswith("Tools \u2192 ")
+
+
+# ---- the loop back from the lesson to the project's own file ------------------------------
+
+def test_a_lesson_names_how_this_project_fares_against_the_checklist_it_just_taught():
+    """The other half of the loop: the gap report links to the lesson, and the lesson says what
+    the project's own file looks like. Without this the course is a course and the report is a
+    report, kept in step by whoever remembers to look at both."""
+    html = run_module()["taught"]
+    assert "⚠️" in html and "HARA" in html
+    assert "1 unresolved [PENDING] marker(s)" in html
+    assert 'href="#/tool/validate"' in html, "the state is only useful next to the whole report"
+
+
+def test_a_lesson_with_no_work_product_says_nothing_about_the_project():
+    """Absence of the block, not just absence of a mark: an empty "Right now in this project"
+    with nothing after it is a claim that the project has nothing to say."""
+    html = run_module()["untaught"]
+    assert "wp-state" not in html
+    assert "⚠️" not in html and "✅" not in html and "❌" not in html
+
+
+def test_a_work_product_the_report_has_no_row_for_puts_no_mark_on_the_page():
+    """Content can run ahead of the chain. A lesson for a work product no agent produces yet
+    must not be given a state, because there is no assessment behind it."""
+    html = run_module()["unknown"]
+    assert "wp-state" not in html
+    assert "⚠️" not in html and "✅" not in html and "❌" not in html
+
+
+def test_with_nothing_generated_the_lesson_shows_no_state_rather_than_a_false_verdict():
+    """Every row missing is a chain nobody has run. Marking each lesson ❌ would read as a
+    finding about the learner's safety file when there is no file to have a finding about."""
+    html = run_module()["fresh"]
+    assert "❌" not in html and "✅" not in html
+    assert "has not been run" in html, "silence with no explanation is its own confusion"
+
+
+def test_the_reasons_the_report_gives_are_escaped_into_the_lesson():
+    assert "&lt;script&gt;" in run_module()["hostile"]
+    assert "<script>" not in run_module()["hostile"]

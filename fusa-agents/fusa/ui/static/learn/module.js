@@ -1,5 +1,6 @@
 // One card at a time. The brief asks for flashcards, not a specification: the pager exists to
 // stop a lesson becoming a wall of text.
+import { api } from "./app.js";
 import { saveProgress } from "./progress.js";
 import { PHASES, vmodelSvg } from "./vmodel.js";
 import { esc } from "./esc.js";
@@ -35,9 +36,36 @@ function inlineCheckHtml(check) {
     <div class="why-line" id="ic-why" hidden></div></div>`;
 }
 
+const MARK = {ok: "✅", warn: "⚠️", missing: "❌"};
+
+/** How this project's own file fares against the checklist this lesson just taught.
+ *
+ *  The other half of the loop the gap report opens: the report links down to the lesson, this
+ *  links back up to the report. It states nothing the report did not — the mark and the reasons
+ *  are the row's own, and a work product with no row gets no mark, because content can run ahead
+ *  of the chain and a lesson is not evidence about a file that does not exist. */
+function projectStateHtml(mod, rep) {
+  const named = mod.work_products || [];
+  if (!rep || !named.length) return "";
+  const rows = rep.phases.flatMap(p => p.rows);
+  // Every row missing is a chain nobody has run, not a finding about the learner's safety file.
+  if (rows.length && rows.every(r => r.state === "missing")) {
+    return `<div class="wp-state">Nothing to compare this against yet — the chain
+      has not been run. <a href="#/tool/validate">Validate My FuSa System →</a></div>`;
+  }
+  const mine = named.map(wp => rows.find(r => r.work_product === wp)).filter(Boolean);
+  if (!mine.length) return "";
+  return `<div class="wp-state">Right now in this project:
+    ${mine.map(r => `<span class="wp-one">${MARK[r.state] ?? "❔"}
+      <code>${esc(r.work_product)}</code> — ${esc((r.why || []).join("; ") || "in order")}
+      </span>`).join("")}
+    <a href="#/tool/validate">the whole report →</a></div>`;
+}
+
 export function renderModule(mod, host) {
   let at = 0;
   let best = 0;
+  let report = null;
   const cards = mod.cards || [];
   const total = cards.length + (mod.inline_check ? 1 : 0);
 
@@ -80,7 +108,8 @@ export function renderModule(mod, host) {
       </div>
       ${mod.work_products?.length ? `<div class="wp">In a real safety file this becomes
         ${mod.work_products.map(w => `<code>${esc(w)}</code>`).join(", ")} — the workbench
-        checks it against <code>${esc(mod.checklist_ref || "generic")}</code>.</div>` : ""}`;
+        checks it against <code>${esc(mod.checklist_ref || "generic")}</code>.</div>` : ""}
+      ${projectStateHtml(mod, report)}`;
 
     host.querySelector("#prev").onclick = () => { at--; draw(); };
     host.querySelector("#next").onclick = async () => {
@@ -105,4 +134,11 @@ export function renderModule(mod, host) {
   };
 
   draw();
+  // Drawn without it first, then again once the report arrives: a lesson must not wait on the
+  // project to be readable, and a learner who has generated nothing still gets their cards.
+  if (mod.work_products?.length) {
+    api("/api/learn/gaps")
+      .then(rep => { report = rep; draw(); })
+      .catch(() => {});   // the lesson is the page; the project's state is an addition to it
+  }
 }
