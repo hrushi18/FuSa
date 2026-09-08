@@ -431,10 +431,25 @@ Hazardous event → S/E/C → ASIL (via `/api/learn/asil`) → Safety goal.
 
 **Interfaces:** Produces `trace_case(orch, seed: int) -> dict` and `GET /api/learn/trace?seed=N`.
 
-Per spec §7 the chain is Safety Goal → FSR → TSR → HW/SW req → test case → result, built from
-**real work products** via `/api/checks` plus one seeded defect, so the cases reflect this
-project rather than invented ones. The learner identifies (a) the broken link, (b) the phase
-that owns the fix, (c) the evidence that would close it.
+Per spec §7 the chain is Safety Goal → FSR → TSR → HW/SW req → test case → result.
+
+**Corrected during execution.** The plan first said to build cases from `/api/checks`. That is
+the wrong source: `/api/checks` returns checklist items, not a trace. The right source was
+already in the codebase — `generators.kinds.generate_traceability` walks the real chain over
+`parent:` links, and its docstring states the very thing this tool teaches: *"a break in it
+shows up as an empty level rather than as a claim."*
+
+So `trace_case` walks the same links the traceability agent walks:
+`reg.generated.items(wp)` and `item.refs("parent")` over `TRACE_CHAIN`, rooted at the `SG`
+items of `SADS`. Verified against a deterministic run: real ids exist and link up —
+`HZ-001 → SG-001 → TSR (parent: SG-001) → …`. One link is then removed with a seeded RNG.
+
+Cases therefore describe this project's actual safety file, and a learner who spots the break
+here is reading the same structure the chain reports on. The learner identifies (a) the broken
+link, (b) the phase that owns the fix, (c) the evidence that would close it.
+
+**Precondition:** the chain must have been run. With nothing generated, the tool says so and
+links to the board rather than inventing a case.
 
 - [ ] **Step 1** Failing tests: a case always contains exactly one broken link; the same seed
   gives the same case (reproducible, so an instructor can set one); the phase named as owner is
