@@ -9,10 +9,30 @@ export const STATUS_ICON = {
 const statusOf = id => state.progress[id]?.status || "not_started";
 const modulesOf = gid => state.modules.filter(m => m.group === gid);
 
+// Fixed, not content-driven: these are code, not course material, so they don't come from
+// the server's module list and carry no completion ring.
+const TOOLS = [
+  {id: "asil",  title: "ASIL Calculator"},
+  {id: "hara",  title: "HARA Builder"},
+  {id: "trace", title: "Traceability Lab"},
+];
+
 export function drawNav(onSelect, filter = "") {
   const q = filter.trim().toLowerCase();
   const nav = document.getElementById("learn-nav");
-  nav.innerHTML = state.groups.map(g => {
+  const toolsHtml = `<div class="grp open" data-g="tools">
+      <div class="g-top" tabindex="0" role="button" aria-expanded="true">
+        <span class="g-caret">▸</span>
+        <span class="g-title">Tools</span>
+        <span class="ring">—</span>
+      </div>
+      <div class="g-mods">${TOOLS.map(t => `
+        <div class="mod ${state.current === `tool:${t.id}` ? "on" : ""}" data-t="${esc(t.id)}"
+             tabindex="0" role="button">
+          <span class="ico">▹</span>
+          <span>${esc(t.title)}</span></div>`).join("")}
+      </div></div>`;
+  nav.innerHTML = toolsHtml + state.groups.map(g => {
     const mods = modulesOf(g.id).filter(m => !q || m.title.toLowerCase().includes(q));
     if (q && !mods.length) return "";
     const done = modulesOf(g.id).filter(m => statusOf(m.id) === "passed").length;
@@ -45,6 +65,11 @@ export function drawNav(onSelect, filter = "") {
   });
   nav.querySelectorAll(".mod[data-m]").forEach(el => {
     const go = () => onSelect(el.dataset.m);
+    el.onclick = go;
+    el.onkeydown = e => { if (e.key === "Enter") go(); };
+  });
+  nav.querySelectorAll(".mod[data-t]").forEach(el => {
+    const go = () => { location.hash = "#/tool/" + el.dataset.t; };
     el.onclick = go;
     el.onkeydown = e => { if (e.key === "Enter") go(); };
   });

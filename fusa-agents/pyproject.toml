@@ -25,4 +25,4 @@ build-backend = "setuptools.build_meta"
 include = ["fusa*"]
 
 [tool.setuptools.package-data]
-"fusa.ui" = ["static/*", "static/learn/*", "content-sample/*.json", "content-sample/modules/*.json"]
+"fusa.ui" = ["static/*", "static/learn/*", "static/learn/tools/*", "content-sample/*.json", "content-sample/modules/*.json"]

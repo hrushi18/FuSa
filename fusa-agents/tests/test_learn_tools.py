@@ -74,3 +74,16 @@ def test_no_source_file_implements_a_determination_rule():
     pattern = re.compile(r"(sev\s*\+\s*exp|s\s*\+\s*e\s*\+\s*c)", re.I)
     for p in list(root.rglob("*.py")) + list(root.rglob("*.js")):
         assert not pattern.search(p.read_text(encoding="utf-8")), f"{p} looks like an ASIL formula"
+
+
+def test_the_calculator_asks_the_server_rather_than_deriving_an_answer(client):
+    """If the browser ever computes an ASIL itself, the licensed table stops being the source."""
+    js = client.get("/static/learn/tools/asil.js")
+    assert js.status_code == 200
+    assert "/api/learn/asil" in js.text, "the calculator must ask the server"
+    for formula in ("S+E+C", "s + e + c", "sum 7", "= 7", "severity + exposure"):
+        assert formula not in js.text, f"asil.js appears to derive an ASIL: {formula!r}"
+
+
+def test_the_shell_routes_to_a_tool(client):
+    assert "#/tool/" in client.get("/static/learn/app.js").text

@@ -56,6 +56,17 @@ export function select(moduleId) {
 }
 
 export async function route() {
+  if (location.hash.startsWith("#/tool/")) {
+    const id = location.hash.slice("#/tool/".length);
+    const mod = {asil: "./tools/asil.js", hara: "./tools/hara.js", trace: "./tools/trace.js"}[id];
+    state.current = `tool:${id}`;
+    $("#learn-crumb").textContent = `Tools → ${id}`;
+    drawNav(select);
+    if (!mod) { $("#learn-main").innerHTML = `<p style="color:var(--dim)">No such tool.</p>`; return; }
+    const m = await import(mod);
+    (m.renderAsil || m.renderHara || m.renderTrace)($("#learn-main"));
+    return;
+  }
   const id = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
   const mod = state.modules.find(m => m.id === id);
   state.current = mod ? mod.id : null;
