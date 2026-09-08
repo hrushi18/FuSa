@@ -352,3 +352,20 @@ def test_a_lesson_card_does_not_borrow_a_grid_class_from_another_component():
     for cls in grid_classes:
         assert f'class="card {cls}"' not in module_js, \
             f"a lesson card uses .{cls}, which is a grid layout defined for another component"
+
+
+def test_an_untranscribed_cell_offers_a_way_to_transcribe_it(asil_paths):
+    """Spec §7. Telling an engineer a cell is missing and giving them nowhere to put it is the
+    difference between a lesson and a tool — and the workbench's only other route is a bare grid."""
+    assert asil_paths.get("offers_fill") is True
+
+
+def test_filling_a_cell_writes_the_selected_key_and_then_re_reads_the_table(asil_paths):
+    """The value must land on the cell the learner is looking at, and the answer shown after
+    must come from the table rather than from what they just typed."""
+    posted = asil_paths.get("posted") or []
+    assert posted, "nothing was posted"
+    assert posted[0]["url"] == "/api/asil-table"
+    assert posted[0]["body"]["values"] == {"S3-E4-C3": "C"}
+    # the harness types C and has the re-read answer B: only a genuine re-read shows B
+    assert badge_of(asil_paths["after_fill"]) == "B", "the input was echoed, not re-read"
