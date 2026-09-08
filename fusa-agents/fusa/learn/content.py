@@ -46,6 +46,11 @@ class ContentRegistry:
     def glossary(self) -> dict[str, str]:
         return self._file("glossary.json", {})
 
+    def scenarios(self, tool: str) -> list[dict]:
+        """The cases an interactive tool walks a learner through. Content, not code: the tool
+        is the method, and a team's own worked examples replace these without touching JS."""
+        return self._file(f"scenarios/{tool}.json", [])
+
     def modules(self) -> list[dict]:
         by_id: dict[str, dict] = {}
         for d in self._dirs():

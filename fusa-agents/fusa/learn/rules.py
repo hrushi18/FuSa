@@ -7,6 +7,8 @@ drives it may be an employer's: an internal hostname in the shipped sample publi
 """
 from __future__ import annotations
 
+from .tools import CONTROLLABILITY, EXPOSURE, SEVERITY
+
 WORD_CAP = 80          # a card should read in under twenty seconds, not be a specification
 
 # C4 — nothing that names an internal system may reach the shipped sample.
@@ -22,6 +24,21 @@ QUESTION_TYPES = {"single", "multi"}
 
 # Likewise one diagram: `vmodel.js` is the only asset this milestone can draw.
 DIAGRAM_ASSET = "vmodel"
+
+# The HARA builder's guidewords. The tool offers exactly these, so an answer key naming
+# anything else is one no learner could ever reach; a test holds the two lists together.
+GUIDEWORDS = ("too late", "too early", "omission", "commission",
+              "too high", "too low", "reverse", "other")
+
+# The sequence the builder walks, and how each step's answer is shaped. The order is the
+# method — item, then what it does, then how that goes wrong, then where — and a scenario
+# missing a step in the middle would leave the learner with a row it cannot finish.
+CHOOSE, TEXT, GUIDEWORD, RATING = "choose", "text", "guideword", "rating"
+SCENARIO_STEPS = {"function": CHOOSE, "guideword": GUIDEWORD, "malfunction": TEXT,
+                  "situation": CHOOSE, "hazardous_event": TEXT, "rating": RATING,
+                  "rationale": TEXT, "safety_goal": TEXT}
+REVEAL_MODES = ("always", "submit", "never")
+SCENARIO_TOOLS = ("hara",)
 
 
 def check_module(m: dict) -> list[str]:
@@ -85,4 +102,86 @@ def check_bundle(reg, work_products: set[str], checklists: set[str]) -> list[str
         ref = m.get("checklist_ref")
         if ref and ref not in checklists:
             errs.append(f"{m['id']}: checklist_ref {ref!r} has no register file")
+    for tool in SCENARIO_TOOLS:
+        errs += check_scenarios(reg.scenarios(tool), tool)
+    return errs
+
+
+def _check_answer(where: str, kind: str, step: dict) -> list[str]:
+    answer = step.get("answer")
+    if kind == CHOOSE:
+        options = step.get("options") or []
+        if isinstance(answer, bool) or not isinstance(answer, int):
+            return [f"{where}: answer {answer!r} is not an index into its options"]
+        if not 0 <= answer < len(options):
+            return [f"{where}: answer {answer} is not an index into {len(options)} options"]
+        return []
+    if kind == GUIDEWORD:
+        return [] if answer in GUIDEWORDS else [
+            f"{where}: guideword {answer!r} is not one of {', '.join(GUIDEWORDS)}"]
+    if kind == RATING:
+        if not isinstance(answer, dict):
+            return [f"{where}: a rating answer is severity, exposure and controllability"]
+        errs = []
+        for field, scale in (("severity", SEVERITY), ("exposure", EXPOSURE),
+                             ("controllability", CONTROLLABILITY)):
+            if answer.get(field) not in scale:
+                errs.append(f"{where}: {field} {answer.get(field)!r} is not one of "
+                            f"{', '.join(scale)}")
+        return errs
+    return [] if str(answer or "").strip() else [f"{where}: needs an answer"]
+
+
+def check_scenario(s: dict, tool: str) -> list[str]:
+    """One case for an interactive tool.
+
+    The rule worth the file: a scenario that says it has no answer key must not ship one. A key
+    sent to the browser and merely hidden there is one view-source away from being the answer,
+    so the unassisted exercise stops being unassisted.
+    """
+    sid = s.get("id", "<no id>")
+    where0 = f"{tool} scenario {sid}"
+    errs: list[str] = []
+    for field in ("id", "title", "item", "hazard_id"):
+        if not str(s.get(field) or "").strip():
+            errs.append(f"{where0}: missing required field \"{field}\"")
+    reveal = s.get("reveal")
+    if reveal not in REVEAL_MODES:
+        errs.append(f"{where0}: reveal {reveal!r} is not one of {', '.join(REVEAL_MODES)}")
+    steps = s.get("steps")
+    if not isinstance(steps, dict):
+        return errs + [f"{where0}: steps must be an object keyed by step name"]
+    for name in steps:
+        if name not in SCENARIO_STEPS:
+            errs.append(f"{where0}: unknown step {name!r}")
+    for name, kind in SCENARIO_STEPS.items():
+        step = steps.get(name) or {}
+        where = f"{where0} step {name}"
+        if not isinstance(step, dict):
+            errs.append(f"{where}: must be an object")
+            continue
+        if kind == CHOOSE and not (step.get("options") or []):
+            errs.append(f"{where}: a choice needs options to choose between")
+        if reveal == "never":
+            errs += [f"{where}: ships an {k!r} although this case has no answer key"
+                     for k in ("answer", "why") if k in step]
+        elif reveal in REVEAL_MODES:
+            errs += _check_answer(where, kind, step)
+    return errs
+
+
+def check_scenarios(items, tool: str) -> list[str]:
+    if not isinstance(items, list):
+        return [f"{tool} scenarios: the file must be a list of cases"]
+    errs: list[str] = []
+    seen: set[str] = set()
+    for s in items:
+        if not isinstance(s, dict):
+            errs.append(f"{tool} scenarios: every case must be an object")
+            continue
+        sid = str(s.get("id") or "")
+        if sid in seen:                    # the id addresses the case; two of them hides one
+            errs.append(f"{tool} scenarios: duplicate id {sid!r}")
+        seen.add(sid)
+        errs += check_scenario(s, tool)
     return errs

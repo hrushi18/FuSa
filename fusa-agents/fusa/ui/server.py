@@ -28,11 +28,13 @@
     GET  /api/learn/progress  this learner's progress record
     POST /api/learn/progress  record cards seen or a quiz score for one module
     GET  /api/learn/asil      S×E×C -> ASIL, by the same lookup the chain performs
+    GET  /api/learn/scenarios/{tool}  the cases one interactive tool teaches with
 """
 from __future__ import annotations
 
 import csv
 import io
+import re
 import threading
 
 import yaml
@@ -46,7 +48,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import config
 from ..agents.llm import PROVIDERS
 from ..learn import ContentRegistry, ProgressStore
-from ..learn.rules import check_bundle
+from ..learn.rules import check_bundle, check_scenarios
 from ..learn.tools import UnknownClass, asil_lookup
 from ..models import Status
 from ..orchestrator import Orchestrator, UnknownAgent
@@ -534,6 +536,22 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
             return asil_lookup(orch.reg, s, e, c)
         except UnknownClass as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.get("/api/learn/scenarios/{tool}")
+    def learn_scenarios(tool: str):
+        """The cases one interactive tool walks a learner through, with their own rule
+        violations attached — the same bargain the course bundle makes.
+
+        The name indexes a file under the content directory, so only a plain id is accepted:
+        anything else could read outside it.
+        """
+        if not re.fullmatch(r"[a-z0-9-]+", tool):
+            raise HTTPException(status_code=404, detail=f"not a tool name: {tool!r}")
+        try:
+            items = content.scenarios(tool)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        return {"tool": tool, "scenarios": items, "errors": check_scenarios(items, tool)}
 
     @app.get("/learn")
     def learn_page():

@@ -1,0 +1,115 @@
+[
+  {
+    "id": "steering-assist",
+    "title": "Steering assist — worked through",
+    "reveal": "always",
+    "hazard_id": "HZ-101",
+    "item": "An electric power steering unit adds torque to whatever the driver puts into the steering wheel. It reads the torque in the column and the speed of the vehicle, and drives a motor on the rack. It has no authority to steer the vehicle on its own.",
+    "steps": {
+      "function": {
+        "options": ["apply assist torque in the direction the driver is steering",
+                    "write service faults to non-volatile memory",
+                    "light the steering warning lamp on the cluster"],
+        "answer": 0,
+        "why": "Start from an output that acts on the vehicle. Housekeeping an item does for the workshop cannot hurt anyone by itself, so it generates no hazard."
+      },
+      "guideword": {
+        "answer": "reverse",
+        "why": "Walk the whole list against the chosen output and keep what makes sense. Against 'assist in the driver's direction', reverse names the misbehaviour with the largest effect. The list exists so the set is generated rather than remembered."
+      },
+      "malfunction": {
+        "answer": "assist torque applied opposite to the driver's steering input",
+        "why": "This is the hazard: the item misbehaving, stated at vehicle level. Notice what it does not contain — no road, no speed, no traffic. On its own it cannot be rated, because there is nothing yet to be exposed to."
+      },
+      "situation": {
+        "options": ["a lane change at motorway speed",
+                    "parked on level ground with the ignition off",
+                    "a diagnostic session on a workshop lift"],
+        "answer": 0,
+        "why": "A situation is an operating state the vehicle really spends time in. Exposure is a statement about the situation, so a situation nobody drives in rates nothing."
+      },
+      "hazardous_event": {
+        "answer": "during a lane change at motorway speed the steering pulls against the driver and the vehicle crosses into the neighbouring lane",
+        "why": "Hazard plus situation, and only this pair can be rated. The same hazard in the parked vehicle harms nobody, which is exactly why the rating belongs to the event and never to the hazard alone."
+      },
+      "rating": {
+        "answer": {"severity": "S3", "exposure": "E3", "controllability": "C3"},
+        "why": "Rate the event you just wrote, not the item and not the hazard. Each class is a judgement about that sentence, and the rationale column is where you defend it."
+      },
+      "rationale": {
+        "answer": "S3 a lane departure into motorway traffic threatens life; E3 lane changes at motorway speed are frequent; C3 an unexpected torque reversal at speed leaves little time to correct",
+        "why": "One clause per class, in the order they are rated. A reviewer who disagrees with the ASIL argues with this sentence, so it is the most re-read cell in the table."
+      },
+      "safety_goal": {
+        "answer": "The steering unit shall not apply assist torque opposite to the driver's steering direction.",
+        "why": "A goal is a vehicle-level property to preserve, it inherits the ASIL of the event it mitigates, and it names no solution. Deciding to cut motor current is a later argument, not this one."
+      }
+    }
+  },
+  {
+    "id": "gap-control",
+    "title": "Cruise gap control — check as you go",
+    "reveal": "submit",
+    "hazard_id": "HZ-102",
+    "item": "A cruise controller holds a set gap to the vehicle ahead using a forward-facing radar. It can command deceleration through the brake system, and the driver can override it at any time by steering, braking or switching it off.",
+    "steps": {
+      "function": {
+        "options": ["command deceleration when the gap to the vehicle ahead closes",
+                    "show the set speed on the cluster",
+                    "count radar health statistics for the workshop"],
+        "answer": 0,
+        "why": "The commanded deceleration is the output with authority over the vehicle. The other two inform someone; only this one moves something."
+      },
+      "guideword": {
+        "answer": "commission",
+        "why": "Commission is the item acting when it was not asked to. Omission — no braking when the gap closes — is a second, separate hazard from the same output, and a real analysis writes both rows."
+      },
+      "malfunction": {
+        "answer": "deceleration commanded when there is no vehicle ahead to close on",
+        "why": "Still only the item misbehaving. Nothing here says how fast, in what traffic, or who is behind — so there is nothing to rate yet."
+      },
+      "situation": {
+        "options": ["motorway traffic with a vehicle following close behind",
+                    "a stationary vehicle in a car park",
+                    "a walking-pace manoeuvre in a loading bay"],
+        "answer": 0,
+        "why": "Pick the situation that makes the harm plausible and that the vehicle is genuinely in a lot of the time. Both halves matter: one drives severity, the other exposure."
+      },
+      "hazardous_event": {
+        "answer": "the vehicle brakes hard in flowing motorway traffic for no reason and the following vehicle strikes it from behind",
+        "why": "The pair, in one sentence, ending in harm to people. If a sentence can be written without mentioning anybody being hurt, it is still a hazard and not yet an event."
+      },
+      "rating": {
+        "answer": {"severity": "S3", "exposure": "E4", "controllability": "C2"},
+        "why": "Controllability asks whether the people involved can avoid the harm — here that includes the driver behind, who has brake lamps and usually enough gap. That is a different question from whether this vehicle's driver can stop the false braking."
+      },
+      "rationale": {
+        "answer": "S3 a rear-end impact at motorway speed threatens life; E4 following traffic on a motorway is a large share of normal running; C2 the following driver can usually brake in time once the lamps come on",
+        "why": "Name the situation in the exposure clause and the people in the controllability clause. A rationale that only repeats the letters explains nothing."
+      },
+      "safety_goal": {
+        "answer": "The cruise controller shall not command deceleration when no vehicle is being followed.",
+        "why": "Written against the hazard, at vehicle level, in terms a customer could read. The FTTI and the safe state come next, and they are engineering decisions rather than analysis results."
+      }
+    }
+  },
+  {
+    "id": "traction-contactors",
+    "title": "Traction contactors — no answer key",
+    "reveal": "never",
+    "hazard_id": "HZ-103",
+    "item": "A battery management unit watches cell voltage and temperature on a traction battery and can open the main contactors, which removes drive torque immediately and without warning. Nothing else in the vehicle can open them.",
+    "steps": {
+      "function": {
+        "options": ["open the main contactors when a cell leaves its safe window",
+                    "balance cell charge while the vehicle is parked",
+                    "report the state of charge to the cluster"]
+      },
+      "situation": {
+        "options": ["overtaking on a two-lane road with oncoming traffic",
+                    "charging overnight at a wall box",
+                    "waiting in a queue on level ground"]
+      }
+    }
+  }
+]

@@ -4,6 +4,10 @@ Reimplementing the determination rule here — even as the well-known S+E+C mnem
 does reproduce the table exactly — would put normative content this project deliberately does
 not ship into the source, and would disagree with whatever the engineer actually transcribed.
 """
+import csv
+import pathlib
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -87,3 +91,80 @@ def test_the_calculator_asks_the_server_rather_than_deriving_an_answer(client):
 
 def test_the_shell_routes_to_a_tool(client):
     assert "#/tool/" in client.get("/static/learn/app.js").text
+
+
+# ---- the HARA builder ----
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+HARA_JS = ROOT / "fusa" / "ui" / "static" / "learn" / "tools" / "hara.js"
+
+
+def hazards_header() -> list[str]:
+    """The header of the real input table, read exactly the way the chain reads it."""
+    from fusa.tools.metrics import uncommented
+    with open(ROOT / "input" / "hazards.csv", newline="", encoding="utf-8") as f:
+        return [h.strip() for h in csv.DictReader(uncommented(f)).fieldnames]
+
+
+def js_array(name: str) -> list[str]:
+    text = HARA_JS.read_text(encoding="utf-8")
+    m = re.search(rf"export const {name} = \[(.*?)\];", text, re.S)
+    assert m, f"hara.js no longer declares {name} — update this test with it"
+    return re.findall(r'"([^"]+)"', m.group(1))
+
+
+def test_the_builders_row_has_exactly_the_columns_of_the_real_hazard_table():
+    """The promise of the tool is that an exercise pastes into input/hazards.csv. If the two
+    lists ever drift, that should fail here rather than in front of a learner."""
+    assert js_array("COLUMNS") == hazards_header()
+
+
+def test_the_builder_asks_the_server_for_the_asil_rather_than_deriving_one():
+    text = HARA_JS.read_text(encoding="utf-8")
+    assert "/api/learn/asil" in text, "the builder must ask the server for the rating"
+    for formula in ("S+E+C", "s + e + c", "sum 7", "= 7", "severity + exposure"):
+        assert formula not in text, f"hara.js appears to derive an ASIL: {formula!r}"
+
+
+def test_the_guideword_list_the_tool_offers_is_the_one_content_is_checked_against():
+    """Two copies of one list rot apart; content validated against a list the tool does not
+    offer would reject a scenario the learner could have completed."""
+    from fusa.learn.rules import GUIDEWORDS
+    assert js_array("GUIDEWORDS") == list(GUIDEWORDS)
+
+
+def test_the_shell_serves_the_builder(client):
+    assert client.get("/static/learn/tools/hara.js").status_code == 200
+
+
+def test_the_builders_cases_are_content_rather_than_code(client):
+    """Three scenarios per the spec, and not one of them written into the JS."""
+    scenarios = client.get("/api/learn/scenarios/hara").json()["scenarios"]
+    assert len(scenarios) == 3
+    assert {s["reveal"] for s in scenarios} == {"always", "submit", "never"}
+    text = HARA_JS.read_text(encoding="utf-8")
+    for s in scenarios:
+        assert s["item"] not in text, f"scenario {s['id']} is hardcoded in the tool"
+
+
+def test_the_scenario_with_no_answer_key_ships_no_answers(client):
+    """'No answer key' has to mean the key is absent, not hidden behind a flag in the browser."""
+    scenarios = client.get("/api/learn/scenarios/hara").json()["scenarios"]
+    unassisted = next(s for s in scenarios if s["reveal"] == "never")
+    for step in unassisted["steps"].values():
+        assert "answer" not in step and "why" not in step
+
+
+def test_the_shipped_scenarios_break_no_rule(client):
+    assert client.get("/api/learn/scenarios/hara").json()["errors"] == []
+
+
+def test_a_tool_with_no_scenario_file_has_none_rather_than_an_error(client):
+    r = client.get("/api/learn/scenarios/trace")
+    assert r.status_code == 200 and r.json()["scenarios"] == []
+
+
+@pytest.mark.parametrize("name", ["..", "hara.json", "har a"])
+def test_a_tool_name_that_could_name_a_file_is_refused(client, name):
+    """The name indexes a path under the content directory; only a plain id may."""
+    assert client.get(f"/api/learn/scenarios/{name}").status_code == 404

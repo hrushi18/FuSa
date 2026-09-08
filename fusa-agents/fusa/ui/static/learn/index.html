@@ -95,6 +95,22 @@
   .asil-why { color: var(--dim); font-size: 12px; }
   .unfilled { border-left: 3px solid var(--s-needs_review); padding-left: 12px; }
   .unfilled p { font-size: 12px; color: var(--dim); line-height: 1.6; }
+
+  .card.item { border-left: 3px solid var(--accent); }
+  .answer { margin-top: 12px; }
+  .words { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  @media (max-width: 720px) { .words { grid-template-columns: repeat(2, 1fr); } }
+  .words .opt { margin: 0; text-align: center; }
+  .write { width: 100%; background: var(--panel2); color: var(--text); font: inherit;
+           border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; resize: vertical; }
+  .write:focus { outline: none; border-color: var(--accent); }
+  .model { margin-top: 14px; border-left: 3px solid var(--s-passed); padding-left: 12px; }
+  .model p { margin: 0; font-size: 13px; }
+  .pair { margin-top: 14px; border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; }
+  .pair p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; }
+  .pair p:last-child { margin-bottom: 0; }
+  .rowout { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+            padding: 12px; font-size: 11px; overflow-x: auto; white-space: pre; margin: 0 0 4px; }
 </style>
 </head>
 <body>

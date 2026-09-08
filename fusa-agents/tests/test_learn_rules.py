@@ -9,7 +9,8 @@ import pathlib
 import yaml
 
 from fusa.learn import ContentRegistry
-from fusa.learn.rules import INTERNAL_PATTERNS, WORD_CAP, check_bundle, check_module
+from fusa.learn.rules import (INTERNAL_PATTERNS, WORD_CAP, check_bundle,
+                              check_module, check_scenarios)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "fusa" / "ui" / "content-sample"
@@ -167,3 +168,91 @@ def test_an_inline_check_with_no_answer_at_all_is_an_error_not_a_crash():
     errs = check_module(module(inline_check={
         "prompt": "p", "options": ["a", "b"], "explanation": "why"}))
     assert any("index" in e for e in errs)
+
+
+# ---- scenarios: the cases the interactive tools walk a learner through ----
+
+def scenario(**over):
+    s = {"id": "s1", "title": "A case", "reveal": "always", "hazard_id": "HZ-101",
+         "item": "An item that does one thing.",
+         "steps": {"function": {"options": ["do the thing", "log a fault"], "answer": 0},
+                   "guideword": {"answer": "too late"},
+                   "malfunction": {"answer": "the thing is done late"},
+                   "situation": {"options": ["at speed", "parked"], "answer": 0},
+                   "hazardous_event": {"answer": "at speed, the thing is done too late"},
+                   "rating": {"answer": {"severity": "S3", "exposure": "E3",
+                                         "controllability": "C2"}},
+                   "rationale": {"answer": "S3 because; E3 because; C2 because"},
+                   "safety_goal": {"answer": "The item shall do the thing in time."}}}
+    s.update(over)
+    return s
+
+
+def test_a_well_formed_scenario_has_nothing_to_report():
+    assert check_scenarios([scenario()], "hara") == []
+
+
+def test_a_scenario_promising_answers_that_omits_one_is_an_error():
+    """A worked example missing a step's answer strands the learner on that step."""
+    s = scenario()
+    del s["steps"]["guideword"]["answer"]
+    errs = check_scenarios([s], "hara")
+    assert any("guideword" in e for e in errs)
+
+
+def test_a_scenario_with_no_answer_key_that_ships_one_is_an_error():
+    """The unassisted case is unassisted because the key is not in the payload — a key sent to
+    the browser and hidden there is one view-source away from being the answer."""
+    errs = check_scenarios([scenario(reveal="never")], "hara")
+    assert any("answer" in e for e in errs)
+
+
+def test_a_choose_answer_past_the_end_of_its_options_is_an_error():
+    s = scenario()
+    s["steps"]["situation"]["answer"] = 2
+    assert any("situation" in e for e in check_scenarios([s], "hara"))
+
+
+def test_a_guideword_outside_the_fixed_list_is_an_error():
+    """The tool offers eight; an answer it cannot offer can never be reached."""
+    s = scenario()
+    s["steps"]["guideword"]["answer"] = "sideways"
+    assert any("sideways" in e for e in check_scenarios([s], "hara"))
+
+
+def test_a_rating_class_outside_the_scales_is_an_error():
+    s = scenario()
+    s["steps"]["rating"]["answer"]["exposure"] = "E9"
+    assert any("E9" in e for e in check_scenarios([s], "hara"))
+
+
+def test_an_unknown_reveal_mode_is_an_error():
+    assert any("reveal" in e for e in check_scenarios([scenario(reveal="sometimes")], "hara"))
+
+
+def test_a_scenario_without_a_hazard_id_is_an_error():
+    """The id is the first column of the row the exercise produces."""
+    assert any("hazard_id" in e for e in check_scenarios([scenario(hazard_id="")], "hara"))
+
+
+def test_two_scenarios_sharing_an_id_is_an_error():
+    errs = check_scenarios([scenario(), scenario(title="Another")], "hara")
+    assert any("s1" in e for e in errs)
+
+
+def test_the_shipped_scenarios_pass_every_rule():
+    reg = ContentRegistry(SAMPLE, None)
+    assert check_scenarios(reg.scenarios("hara"), "hara") == []
+
+
+def test_a_choose_answer_of_true_is_not_an_index_into_its_options():
+    """`True` is an int in Python, so an unguarded index check would quietly select option 1."""
+    s = scenario()
+    s["steps"]["function"]["answer"] = True
+    assert any("function" in e for e in check_scenarios([s], "hara"))
+
+
+def test_a_scenario_whose_steps_are_not_an_object_is_reported_not_raised():
+    """Hand-written content gets shapes wrong; a traceback in the course loader takes the whole
+    page down, and every other case with it."""
+    assert any("steps" in e for e in check_scenarios([scenario(steps=[])], "hara"))
