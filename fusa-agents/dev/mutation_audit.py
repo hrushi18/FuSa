@@ -38,6 +38,7 @@ TARGETS = [
     ("fusa/learn/progress.py", "tests/test_learn_progress.py tests/test_learn_api.py"),
     ("fusa/learn/rules.py",    "tests/test_learn_rules.py tests/test_learn_api.py"),
     ("fusa/learn/content.py",  "tests/test_learn_content.py tests/test_learn_api.py"),
+    ("fusa/learn/tools.py",    "tests/test_learn_tools.py"),
     ("fusa/pdf.py",            "tests/test_report.py"),
     ("fusa/agents/llm.py",     "tests/test_llm_retry.py tests/test_settings.py tests/test_dotenv.py"),
 ]

@@ -27,6 +27,7 @@
     GET  /api/learn/content   course bundle (groups, modules, paths, glossary) + rule violations
     GET  /api/learn/progress  this learner's progress record
     POST /api/learn/progress  record cards seen or a quiz score for one module
+    GET  /api/learn/asil      S×E×C -> ASIL, by the same lookup the chain performs
 """
 from __future__ import annotations
 
@@ -46,6 +47,7 @@ from .. import config
 from ..agents.llm import PROVIDERS
 from ..learn import ContentRegistry, ProgressStore
 from ..learn.rules import check_bundle
+from ..learn.tools import UnknownClass, asil_lookup
 from ..models import Status
 from ..orchestrator import Orchestrator, UnknownAgent
 from ..pdf import render_pdf
@@ -524,6 +526,14 @@ def create_app(root: Path | None = None, dry_run: bool | None = None,
                 raise HTTPException(status_code=400, detail="cards_seen must not be negative")
             seen = int(seen)
         return progress.record(mid, score=score, cards_seen=seen)
+
+    @app.get("/api/learn/asil")
+    def learn_asil(s: str, e: str, c: str):
+        """The calculator's answer is the chain's answer: same function, same table."""
+        try:
+            return asil_lookup(orch.reg, s, e, c)
+        except UnknownClass as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     @app.get("/learn")
     def learn_page():
