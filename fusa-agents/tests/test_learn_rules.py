@@ -9,7 +9,7 @@ import pathlib
 import yaml
 
 from fusa.learn import ContentRegistry
-from fusa.learn.rules import (INTERNAL_PATTERNS, WORD_CAP, check_bundle,
+from fusa.learn.rules import (INTERNAL_PATTERNS, TOOL_IDS, WORD_CAP, check_bundle,
                               check_module, check_scenarios)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -77,6 +77,19 @@ def test_a_diagram_card_naming_an_asset_this_milestone_cannot_draw_is_an_error()
 def test_a_diagram_card_asking_for_the_vmodel_is_fine():
     assert check_module(module(cards=[
         {"type": "diagram", "asset": "vmodel", "alt": "the V-model"}])) == []
+
+
+def test_a_tool_card_naming_a_real_tool_is_fine():
+    assert check_module(module(cards=[
+        {"type": "tool", "tool": "hara", "body": "Try it now."}])) == []
+
+
+def test_a_tool_card_naming_a_tool_that_does_not_exist_is_an_error():
+    """A card can only launch a route the nav actually offers."""
+    errs = check_module(module(cards=[
+        {"type": "tool", "tool": "grease-the-gears", "body": "Try it now."}]))
+    assert any("grease-the-gears" in e for e in errs)
+    assert all(tool in " ".join(errs) for tool in TOOL_IDS), "the message should name the real options"
 
 
 def test_a_numeric_question_is_rejected_until_the_platform_can_render_one():

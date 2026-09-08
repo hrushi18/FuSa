@@ -93,6 +93,17 @@ def test_the_shell_routes_to_a_tool(client):
     assert "#/tool/" in client.get("/static/learn/app.js").text
 
 
+def test_the_breadcrumb_and_the_nav_read_the_tool_titles_from_one_list(client):
+    """The router used to spell the breadcrumb from the raw route id ('Tools → asil'). The
+    fix has to be one shared list, not app.js growing its own copy of nav.js's titles."""
+    nav_js = client.get("/static/learn/nav.js").text
+    app_js = client.get("/static/learn/app.js").text
+    assert "ASIL Calculator" in nav_js and "HARA Builder" in nav_js
+    assert "ASIL Calculator" not in app_js and "HARA Builder" not in app_js, \
+        "app.js carries its own spelling of a tool title instead of importing nav.js's"
+    assert "TOOLS" in app_js, "the breadcrumb must read the nav's exported list"
+
+
 # ---- the HARA builder ----
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]

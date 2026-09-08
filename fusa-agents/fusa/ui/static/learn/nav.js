@@ -10,8 +10,9 @@ const statusOf = id => state.progress[id]?.status || "not_started";
 const modulesOf = gid => state.modules.filter(m => m.group === gid);
 
 // Fixed, not content-driven: these are code, not course material, so they don't come from
-// the server's module list and carry no completion ring.
-const TOOLS = [
+// the server's module list and carry no completion ring. Exported so the router can name a
+// tool by its real title rather than keeping a second, driftable copy of this list.
+export const TOOLS = [
   {id: "asil",  title: "ASIL Calculator"},
   {id: "hara",  title: "HARA Builder"},
   {id: "trace", title: "Traceability Lab"},

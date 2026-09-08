@@ -5,13 +5,22 @@ import { PHASES, vmodelSvg } from "./vmodel.js";
 import { esc } from "./esc.js";
 
 const KIND = { concept: "Concept", example: "Worked example",
-               why: "Why it matters", diagram: "Where this sits" };
+               why: "Why it matters", diagram: "Where this sits", tool: "Try it" };
 
 function cardHtml(card) {
   if (card.type === "diagram") {
     const reveal = PHASES.includes(card.reveal) ? card.reveal : "all";
     return `<div class="card diagram"><span class="kind">${KIND.diagram}</span>
       ${vmodelSvg(reveal, card.alt || "")}</div>`;
+  }
+  if (card.type === "tool") {
+    // The launch is a plain hash link — the router already handles #/tool/<id>, so no
+    // click handler needs writing here, and the back button works like everywhere else.
+    return `<div class="card tool">
+      <span class="kind">${KIND.tool}</span>
+      ${card.title ? `<h3>${esc(card.title)}</h3>` : ""}
+      <p>${esc(card.body)}</p>
+      <a class="tool-launch" href="#/tool/${esc(card.tool)}">Open the tool →</a></div>`;
   }
   return `<div class="card ${esc(card.type)}">
     <span class="kind">${KIND[card.type] || ""}</span>

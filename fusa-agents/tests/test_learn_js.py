@@ -74,6 +74,35 @@ def test_the_harness_fails_when_the_catch_is_removed(tmp_path):
         run_harness(broken)
 
 
+# ---- a lesson card launching straight into a tool ----
+
+MODULE = Path(__file__).parent / "js" / "module-paths.mjs"
+
+
+def run_module(learn_dir: Path = LEARN) -> dict:
+    r = subprocess.run(["node", str(MODULE), str(learn_dir)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"harness failed:\n{r.stderr}"
+    return json.loads(r.stdout)
+
+
+def test_a_tool_card_renders_a_launch_button_linking_to_the_tool():
+    html = run_module()["html"]
+    assert 'href="#/tool/hara"' in html
+    assert "Open the HARA Builder and finish the row." in html
+
+
+def test_the_harness_notices_a_tool_card_that_stops_linking_to_the_tool(tmp_path):
+    """The guard on the test above: a harness that cannot fail proves nothing."""
+    broken = tmp_path / "learn"
+    shutil.copytree(LEARN, broken)
+    src = (broken / "module.js").read_text(encoding="utf-8")
+    unlinked = src.replace('href="#/tool/${esc(card.tool)}"', 'href="#"')
+    assert unlinked != src, "module.js changed shape — update this test with it"
+    (broken / "module.js").write_text(unlinked, encoding="utf-8")
+    assert 'href="#/tool/hara"' not in run_module(broken)["html"]
+
+
 # ---- the HARA builder's session, driven step by step ----
 
 TOOLS = Path(__file__).parent / "js" / "tools-paths.mjs"

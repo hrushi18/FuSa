@@ -1,6 +1,6 @@
 // Boot, routing and the one piece of shared state. Routing is the URL hash so a module is
 // linkable and the back button works, with no router library to install.
-import { drawNav } from "./nav.js";
+import { drawNav, TOOLS } from "./nav.js";
 
 export const state = {
   groups: [], modules: [], paths: [], glossary: {}, passMark: 0.8,
@@ -58,12 +58,12 @@ export function select(moduleId) {
 export async function route() {
   if (location.hash.startsWith("#/tool/")) {
     const id = location.hash.slice("#/tool/".length);
-    const mod = {asil: "./tools/asil.js", hara: "./tools/hara.js", trace: "./tools/trace.js"}[id];
+    const tool = TOOLS.find(t => t.id === id);        // the one list — nav.js owns it
     state.current = `tool:${id}`;
-    $("#learn-crumb").textContent = `Tools → ${id}`;
+    $("#learn-crumb").textContent = `Tools → ${tool ? tool.title : id}`;
     drawNav(select);
-    if (!mod) { $("#learn-main").innerHTML = `<p style="color:var(--dim)">No such tool.</p>`; return; }
-    const m = await import(mod);
+    if (!tool) { $("#learn-main").innerHTML = `<p style="color:var(--dim)">No such tool.</p>`; return; }
+    const m = await import(`./tools/${tool.id}.js`);
     (m.renderAsil || m.renderHara || m.renderTrace)($("#learn-main"));
     return;
   }

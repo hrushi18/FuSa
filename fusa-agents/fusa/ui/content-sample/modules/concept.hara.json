@@ -13,7 +13,9 @@
     {"type": "example", "example_ref": "generic-brakes", "title": "Worked: service brakes",
      "body": "Activity: deceleration. Guideword: omission. Hazard: service brakes do not engage. Situation: approaching a crossing. Hazardous event: brakes fail to engage as pedestrians cross. Safety goal: omission of service braking shall not occur."},
     {"type": "diagram", "asset": "vmodel", "reveal": "hara",
-     "alt": "The V-model with hazard analysis highlighted, immediately after item definition and before the functional safety concept."}
+     "alt": "The V-model with hazard analysis highlighted, immediately after item definition and before the functional safety concept."},
+    {"type": "tool", "tool": "hara", "title": "Build this hazard as a row",
+     "body": "Open the HARA Builder and walk one hazard from function to safety goal. It asks the same questions this lesson just did, and produces a row shaped for input/hazards.csv."}
   ],
   "inline_check": {
     "prompt": "\"Steering assist applies torque that was not requested.\" What is this?",

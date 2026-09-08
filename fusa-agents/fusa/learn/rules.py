@@ -15,7 +15,11 @@ WORD_CAP = 80          # a card should read in under twenty seconds, not be a sp
 INTERNAL_PATTERNS = ("sharepoint.com", "srv.volvo.com", "setoolgtt", "swap://",
                      "Navigator", "FS-QDPR", "WBS", "Volvo")
 
-CARD_TYPES = {"concept", "example", "why", "diagram"}
+CARD_TYPES = {"concept", "example", "why", "diagram", "tool"}
+
+# The tools a lesson can launch a learner into. The nav's Tools group offers exactly these
+# three routes, so a card naming a fourth would send a learner to a page that doesn't exist.
+TOOL_IDS = ("asil", "hara", "trace")
 
 # The spec's data model also has `numeric` and `match`, but only these two have a renderer and
 # a scorer today; the other two arrive with the ASIL calculator in M3. Validation describes what
@@ -56,6 +60,8 @@ def check_module(m: dict) -> list[str]:
             if asset != DIAGRAM_ASSET:
                 errs.append(f"{where}: asset {asset!r} — custom diagram assets arrive in a later"
                             f" milestone; only {DIAGRAM_ASSET!r} renders today")
+        if c.get("type") == "tool" and c.get("tool") not in TOOL_IDS:
+            errs.append(f"{where}: tool {c.get('tool')!r} is not one of {', '.join(TOOL_IDS)}")
         words = len((c.get("body") or "").split())
         if words > WORD_CAP:
             errs.append(f"{where}: {words} words, over the {WORD_CAP}-word cap")
